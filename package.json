@@ -1,0 +1,8 @@
+{
+  "name": "OCRServer",
+  "version": "0.0.0",
+  "dependencies": {
+    "tmp": "0.0.28",
+    "async": "~1.5.2"
+  }
+}
