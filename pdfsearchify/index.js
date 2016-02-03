@@ -1,3 +1,4 @@
+var fs = require('fs');
 var path = require('path');
 var exec = require('child_process').exec;
 var async = require('async');
@@ -54,6 +55,22 @@ function ocrPage(infile, outfile, cb) {
     });
 }
 
+function cleanHOCR(infile, outfile, cb) {
+    fs.readFile(infile, 'utf8', function(err, data) {
+        if (err) {
+            return cb(err);
+        }
+        var result = data.replace(/='[^"]+'/g, function(s) { return s.replace(/'/g, '"'); });
+        fs.writeFile(outfile, result, 'utf8', function(err) {
+            if (err) {
+                return cb(err);
+            } else {
+                return cb(null, outfile);
+            }
+        });
+    });
+}
+
 function composePage(basefile, hocrfile, outfile, cb) {
     exec('hocr2pdf -i "'+basefile+'" -s -o "'+outfile+'" < "'+hocrfile+'"', function(err, stdout, stderr) {
         if (err) {
@@ -107,6 +124,16 @@ function searchifyPage(infile, tmpdir, pagenum, cb) {
         function(cb) {
             var outfile = path.join(tmpdir, 'ocr-'+pagenum+'.hocr');
             ocrPage(unpaperfile, outfile, function(err, outfile) {
+                if (err) {
+                    return cb(err);
+                }
+                ocrfile = outfile;
+                return cb();
+            });
+        },
+        function(cb) {
+            var outfile = path.join(tmpdir, 'ocr-fixed-'+pagenum+'.hocr');
+            cleanHOCR(ocrfile, outfile, function(err, outfile) {
                 if (err) {
                     return cb(err);
                 }
