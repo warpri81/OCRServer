@@ -64,6 +64,21 @@ function composePage(basefile, hocrfile, outfile, cb) {
     });
 }
 
+function composePDF(infiles, outfile, cb) {
+    var infileargs = infiles.map(function(infile) { return '"'+infile+'"'; }).join(' ');
+    exec(
+        'gs -dNOPAUSE -dSAFER -sDEVICE=pdfwrite '+
+        '-dBatch -o "'+outfile+'" '+infileargs,
+        function(err, stdout, stderr) {
+            if (err) {
+                return cb(err);
+            } else {
+                return cb(null, outfile);
+            }
+        }
+    );
+}
+
 function searchifyPage(infile, tmpdir, pagenum, cb) {
     var originalfile
       , unpaperfile
@@ -110,11 +125,12 @@ function searchifyPage(infile, tmpdir, pagenum, cb) {
             });
         },
     ], function(err) {
-        return cb(err);
+        return cb(err, pdffile);
     });
 }
 
-function searchify(infile, tmpdir, cb) {
+function searchify(infile, outfile, tmpdir, cb) {
+    var pdfpages = [];
     getPDFPageCount(infile, function(err, pagecount) {
         if (err) {
             return cb(err);
@@ -124,11 +140,27 @@ function searchify(infile, tmpdir, cb) {
             (function() {
                 var pagenum = i;
                 tasks.push(function(cb) {
-                    searchifyPage(infile, tmpdir, pagenum, cb);
+                    searchifyPage(infile, tmpdir, pagenum, function(err, outfile) {
+                        if (err) {
+                            return cb(err);
+                        }
+                        pdfpages.push(outfile);
+                        return cb();
+                    });
                 });
             })();
         }
-        async.series(tasks, cb);
+        async.series(tasks, function(err) {
+            if (err) {
+                return cb(err);
+            }
+            composePDF(pdfpages, outfile, function(err, outfile) {
+                if (err) {
+                    return cb(err);
+                }
+                return cb();
+            });
+        });
     });
 }
 

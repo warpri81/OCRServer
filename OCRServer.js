@@ -9,7 +9,7 @@ tmp.setGracefulCleanup();
 var pages;
 console.log('Output: '+tmpdir.name);
 
-pdfsearchify.searchify(filename, tmpdir.name, function(err) {
+pdfsearchify.searchify(filename, 'results.pdf', tmpdir.name, function(err) {
     if (err) {
         console.log('ERROR: '+err);
     } else {
