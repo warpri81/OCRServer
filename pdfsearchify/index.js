@@ -40,9 +40,35 @@ function unpaperPage(infile, outfile, cb) {
     });
 }
 
+function ocrPage(infile, outfile, cb) {
+    var outfilebase = path.join(
+        path.dirname(outfile),
+        path.basename(outfile, '.hocr')
+    );
+    exec('tesseract "'+infile+'" "'+outfilebase+'" hocr', function(err, stdout, stderr) {
+        if (err) {
+            return cb(err);
+        } else {
+            return cb(null, outfilebase+'.hocr');
+        }
+    });
+}
+
+function composePage(basefile, hocrfile, outfile, cb) {
+    exec('hocr2pdf -i "'+basefile+'" -s -o "'+outfile+'" < "'+hocrfile+'"', function(err, stdout, stderr) {
+        if (err) {
+            return cb(err);
+        } else {
+            return cb(null, outfile);
+        }
+    });
+}
+
 function searchifyPage(infile, tmpdir, pagenum, cb) {
     var originalfile
-      , unpaperedfile;
+      , unpaperfile
+      , ocrfile
+      , pdffile;
     async.series([
         function(cb) {
             extractPage(infile, tmpdir, pagenum, function(err, outfile) {
@@ -54,11 +80,32 @@ function searchifyPage(infile, tmpdir, pagenum, cb) {
             });
         },
         function(cb) {
-            var unpaperedfile = path.join(tmpdir, 'unpapered-'+pagenum+'.pnm');
-            unpaperPage(originalfile, unpaperedfile, function(err, outfile) {
+            var outfile = path.join(tmpdir, 'unpaper-'+pagenum+'.pnm');
+            unpaperPage(originalfile, outfile, function(err, outfile) {
                 if (err) {
                     return cb(err);
                 }
+                unpaperfile = outfile;
+                return cb();
+            });
+        },
+        function(cb) {
+            var outfile = path.join(tmpdir, 'ocr-'+pagenum+'.hocr');
+            ocrPage(unpaperfile, outfile, function(err, outfile) {
+                if (err) {
+                    return cb(err);
+                }
+                ocrfile = outfile;
+                return cb();
+            });
+        },
+        function(cb) {
+            var outfile = path.join(tmpdir, 'pdf-'+pagenum+'.pdf');
+            composePage(unpaperfile, ocrfile, outfile, function(err, outfile) {
+                if (err) {
+                    return cb(err);
+                }
+                pdffile = outfile;
                 return cb();
             });
         },
