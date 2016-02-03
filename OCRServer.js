@@ -9,28 +9,11 @@ tmp.setGracefulCleanup();
 var pages;
 console.log('Output: '+tmpdir.name);
 
-async.series([
-    function(cb) {
-        pdfsearchify.getPDFPageCount(filename, function(err, pagecount) {
-            if (err) {
-                return cb(err);
-            } else {
-                console.log('Pages: '+pagecount);
-                pages = pagecount;
-                return cb();
-            }
-        });
-    },
-    function(cb) {
-        pdfsearchify.splitPDFPages(filename, tmpdir.name, cb);
-    },
-    function(cb) {
-        pdfsearchify.unpaperPages(tmpdir.name, pages, cb);
-    },
-],
-function(err) {
+pdfsearchify.searchify(filename, tmpdir.name, function(err) {
     if (err) {
-        console.log('ERROR:\n'+err);
+        console.log('ERROR: '+err);
+    } else {
+        console.log('Everything is OK');
     }
     process.exit(0);
 });

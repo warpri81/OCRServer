@@ -2,64 +2,87 @@ var path = require('path');
 var exec = require('child_process').exec;
 var async = require('async');
 
-var pdfsearchify = {};
-
-var padSize = 5
-  , imagePrefix = 'image'
-  , unpaperPrefix = 'unpaper'
-;
-
-function padNumber(n, p, c) {
-    var pad_char = typeof c !== 'undefined' ? c : '0';
-    var pad = new Array(1 + p).join(pad_char);
-    return (pad + n).slice(-pad.length);
-}
+var upsample = 300;
 
 function getPDFPageCount(filename, cb) {
     exec('pdftk "'+filename+'" dump_data | grep "NumberOfPages" | cut -d":" -f2', function(err, stdout, stderr) {
         if (stdout) {
-            cb(null, parseInt(stdout.trim()));
+            return cb(null, parseInt(stdout.trim()));
         } else {
-            cb(stderr);
+            return cb(stderr);
         }
     });
 }
 
-function splitPDFPages(filename, outdir, cb) {
-    var outfileFormat = path.join(outdir, imagePrefix+'-%0'+padSize+'d.pnm');
-    exec('gs -dNOPAUSE -dSAFER -sDEVICE=pnmraw -r300 -dBatch -o "'+outfileFormat+'" "'+filename+'"', function(err, stdout, stderr) {
-        if (err) {
-            cb(err)
-        } else {
-            cb();
+function extractPage(infile, outdir, pagenum, cb) {
+    var outfile = path.join(outdir, 'original-'+pagenum+'.pnm');
+    exec(
+        'gs -dNOPAUSE -dSAFER -sDEVICE=pnmraw '+
+        '-r'+upsample+' -dFirstPage='+pagenum+' -dLastPage='+pagenum+' '+
+        '-dBatch -o "'+outfile+'" "'+infile+'"',
+        function(err, stdout, stderr) {
+            if (err) {
+                return cb(err);
+            } else {
+                return cb(null, outfile);
+            }
         }
-    });
+    );
 }
 
-function unpaperImage(infile, outfile, cb) {
+function unpaperPage(infile, outfile, cb) {
     exec('unpaper "'+infile+'" "'+outfile+'"', function(err, stdout, stderr) {
         if (err) {
-            cb(err);
+            return cb(err);
         } else {
-            cb();
+            return cb(null, outfile);
         }
     });
 }
 
-function unpaperPages(indir, pagecount, cb) {
-    var tasks = [];
-    for (var i = 1; i <= pagecount; i++) {
-        (function() {
-            var infile = path.join(indir, imagePrefix+'-'+padNumber(i, padSize)+'.pnm')
-              , outfile = path.join(indir, unpaperPrefix+'-'+padNumber(i, padSize)+'.pnm');
-            tasks.push(function(cb) {
-                unpaperImage(infile, outfile, cb);
+function searchifyPage(infile, tmpdir, pagenum, cb) {
+    var originalfile
+      , unpaperedfile;
+    async.series([
+        function(cb) {
+            extractPage(infile, tmpdir, pagenum, function(err, outfile) {
+                if (err) {
+                    return cb(err);
+                }
+                originalfile = outfile;
+                return cb();
             });
-        })();
-    }
-    async.series(tasks, cb);
+        },
+        function(cb) {
+            var unpaperedfile = path.join(tmpdir, 'unpapered-'+pagenum+'.pnm');
+            unpaperPage(originalfile, unpaperedfile, function(err, outfile) {
+                if (err) {
+                    return cb(err);
+                }
+                return cb();
+            });
+        },
+    ], function(err) {
+        return cb(err);
+    });
 }
 
-module.exports.getPDFPageCount = getPDFPageCount;
-module.exports.splitPDFPages = splitPDFPages;
-module.exports.unpaperPages = unpaperPages;
+function searchify(infile, tmpdir, cb) {
+    getPDFPageCount(infile, function(err, pagecount) {
+        if (err) {
+            return cb(err);
+        }
+        var tasks = [];
+        for (var i = 1; i <= pagecount; i++) {
+            (function() {
+                var pagenum = i;
+                tasks.push(function(cb) {
+                    searchifyPage(infile, tmpdir, pagenum, cb);
+                });
+            })();
+        }
+        async.series(tasks, cb);
+    });
+}
+
+module.exports.searchify = searchify;
