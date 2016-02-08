@@ -1,6 +1,6 @@
 var tmp = require('tmp');
 var async = require('async');
-var pdfsearchify = require('./pdfsearchify');
+var pdfsearchify = require('./pdfsearchify')();
 
 var infile = process.argv[2]
   , outfile = process.argv[3];
@@ -10,7 +10,7 @@ tmp.setGracefulCleanup();
 var pages;
 console.log('Output: '+tmpdir.name);
 
-pdfsearchify.searchify(infile, outfile, tmpdir.name, function(err) {
+pdfsearchify(infile, outfile, tmpdir.name, function(err) {
     if (err) {
         console.log('ERROR: '+err);
     } else {
