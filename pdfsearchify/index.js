@@ -9,6 +9,12 @@ function createPDFSearchify(options) {
 
     options = options || {};
     var upsample = options.upsample || 300;
+    var keepfiles = options.keepfiles || false;
+
+    var tmp = require('tmp');
+    if (!keepfiles) {
+        tmp.setGracefulCleanup();
+    }
 
     return searchify;
 
@@ -163,36 +169,42 @@ function createPDFSearchify(options) {
         });
     }
 
-    function searchify(infile, outfile, tmpdir, cb) {
+    function searchify(infile, outfile, cb) {
+        this.emit('starting');
         var pdfpages = [];
         getPDFPageCount(infile, function(err, pagecount) {
             if (err) {
                 return cb(err);
             }
-            var tasks = [];
-            for (var i = 1; i <= pagecount; i++) {
-                (function() {
-                    var pagenum = i;
-                    tasks.push(function(cb) {
-                        searchifyPage(infile, tmpdir, pagenum, function(err, outfile) {
-                            if (err) {
-                                return cb(err);
-                            }
-                            pdfpages.push(outfile);
-                            return cb();
-                        });
-                    });
-                })();
-            }
-            async.series(tasks, function(err) {
+            tmp.dir({ prefix: 'OCRServer', keep: keepfiles }, function(err, tmpdir, cleanupcb) {
                 if (err) {
                     return cb(err);
                 }
-                composePDF(pdfpages, outfile, function(err, outfile) {
+                var tasks = [];
+                for (var i = 1; i <= pagecount; i++) {
+                    (function() {
+                        var pagenum = i;
+                        tasks.push(function(cb) {
+                            searchifyPage(infile, tmpdir, pagenum, function(err, outfile) {
+                                if (err) {
+                                    return cb(err);
+                                }
+                                pdfpages.push(outfile);
+                                return cb();
+                            });
+                        });
+                    })();
+                }
+                async.series(tasks, function(err) {
                     if (err) {
                         return cb(err);
                     }
-                    return cb();
+                    composePDF(pdfpages, outfile, function(err, outfile) {
+                        if (err) {
+                            return cb(err);
+                        }
+                        return cb();
+                    });
                 });
             });
         });
