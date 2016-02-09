@@ -98,6 +98,7 @@ function createPDFSearchify(options) {
     }
 
     function composePDF(infiles, outfile, cb) {
+        var composeTime = process.hrtime();
         searchify.emit('compose', { outfile: outfile, });
         var infileargs = infiles.map(function(infile) { return '"'+infile+'"'; }).join(' ');
         exec(
@@ -107,7 +108,7 @@ function createPDFSearchify(options) {
                 if (err) {
                     return cb(err);
                 }
-                searchify.emit('composed', { outfile: outfile, });
+                searchify.emit('composed', { outfile: outfile, time: process.hrtime(composeTime), });
                 return cb(null, outfile);
             }
         );
@@ -121,17 +122,19 @@ function createPDFSearchify(options) {
           , pdffile;
         async.series([
             function(cb) {
+                var extractPageTime = process.hrtime();
                 searchify.emit('extractPage', { infile: infile, pagenum: pagenum, });
                 extractPage(infile, tmpdir, pagenum, function(err, outfile) {
                     if (err) {
                         return cb(err);
                     }
                     originalfile = outfile;
-                    searchify.emit('pageExtracted', { infile: infile, pagenum: pagenum, });
+                    searchify.emit('pageExtracted', { infile: infile, pagenum: pagenum, time: process.hrtime(extractPageTime), });
                     return cb();
                 });
             },
             function(cb) {
+                var cleanPageTime = process.hrtime();
                 searchify.emit('cleanPage', { infile: infile, pagenum: pagenum, });
                 var outfile = path.join(tmpdir, 'unpaper-'+pagenum+'.pnm');
                 unpaperPage(originalfile, outfile, function(err, outfile) {
@@ -139,11 +142,12 @@ function createPDFSearchify(options) {
                         return cb(err);
                     }
                     unpaperfile = outfile;
-                    searchify.emit('pageCleaned', { infile: infile, pagenum: pagenum, });
+                    searchify.emit('pageCleaned', { infile: infile, pagenum: pagenum, time: process.hrtime(cleanPageTime), });
                     return cb();
                 });
             },
             function(cb) {
+                var ocrPageTime = process.hrtime();
                 searchify.emit('ocrPage', { infile: infile, pagenum: pagenum, });
                 var outfile = path.join(tmpdir, 'ocr-'+pagenum+'.hocr');
                 ocrPage(unpaperfile, outfile, function(err, outfile) {
@@ -151,11 +155,12 @@ function createPDFSearchify(options) {
                         return cb(err);
                     }
                     ocrfile = outfile;
-                    searchify.emit('pageOcred', { infile: infile, pagenum: pagenum, });
+                    searchify.emit('pageOcred', { infile: infile, pagenum: pagenum, time: process.hrtime(ocrPageTime), });
                     return cb();
                 });
             },
             function(cb) {
+                var preparePageTime = process.hrtime();
                 searchify.emit('preparePage', { infile: infile, pagenum: pagenum, });
                 var outfile = path.join(tmpdir, 'ocr-fixed-'+pagenum+'.hocr');
                 cleanHOCR(ocrfile, outfile, function(err, outfile) {
@@ -163,11 +168,12 @@ function createPDFSearchify(options) {
                         return cb(err);
                     }
                     ocrfile = outfile;
-                    searchify.emit('pagePrepared', { infile: infile, pagenum: pagenum, });
+                    searchify.emit('pagePrepared', { infile: infile, pagenum: pagenum, time: process.hrtime(preparePageTime), });
                     return cb();
                 });
             },
             function(cb) {
+                var composePageTime = process.hrtime();
                 searchify.emit('composePage', { infile: infile, pagenum: pagenum, });
                 var outfile = path.join(tmpdir, 'pdf-'+pagenum+'.pdf');
                 composePage(unpaperfile, ocrfile, outfile, function(err, outfile) {
@@ -175,7 +181,7 @@ function createPDFSearchify(options) {
                         return cb(err);
                     }
                     pdffile = outfile;
-                    searchify.emit('pageComposed', { infile: infile, pagenum: pagenum, });
+                    searchify.emit('pageComposed', { infile: infile, pagenum: pagenum, time: process.hrtime(composePageTime), });
                     return cb();
                 });
             },
@@ -185,6 +191,7 @@ function createPDFSearchify(options) {
     }
 
     function searchify(infile, outfile, cb) {
+        var startTime = process.hrtime();
         searchify.emit('start', { infile: infile, outfile: outfile, });
         var pdfpages = [];
         getPDFPageCount(infile, function(err, pagecount) {
@@ -200,13 +207,14 @@ function createPDFSearchify(options) {
                     (function() {
                         var pagenum = i;
                         tasks.push(function(cb) {
+                            var startPageTime = process.hrtime();
                             searchify.emit('startPage', { infile: infile, pagenum: pagenum, });
                             searchifyPage(infile, tmpdir, pagenum, function(err, outfile) {
                                 if (err) {
                                     return cb(err);
                                 }
                                 pdfpages.push(outfile);
-                                searchify.emit('donePage', { infile: infile, pagenum: pagenum, });
+                                searchify.emit('donePage', { infile: infile, pagenum: pagenum, time: process.hrtime(startPageTime), });
                                 return cb();
                             });
                         });
@@ -220,7 +228,7 @@ function createPDFSearchify(options) {
                         if (err) {
                             return cb(err);
                         }
-                        searchify.emit('done', { infile: infile, outfile: outfile, });
+                        searchify.emit('done', { infile: infile, outfile: outfile, time: process.hrtime(startTime), });
                         return cb();
                     });
                 });
