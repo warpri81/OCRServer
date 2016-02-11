@@ -32,6 +32,8 @@ function createPDFSearchify(options) {
     }
 
     function extractPage(infile, outdir, pagenum, cb) {
+        searchify.emit('extractPage', { infile: infile, pagenum: pagenum, });
+        var extractPageTime = process.hrtime();
         var outfile = path.join(outdir, 'original-'+pagenum+'.pnm');
         exec(
             'gs -dNOPAUSE -dSAFER -sDEVICE=pnmraw '+
@@ -41,38 +43,50 @@ function createPDFSearchify(options) {
                 if (err) {
                     return cb(err);
                 } else {
-                    return cb(null, outfile);
+                    searchify.emit('pageExtracted', { infile: infile, pagenum: pagenum, time: process.hrtime(extractPageTime), });
+                    return cb(null, infile, outfile, outdir, pagenum);
                 }
             }
         );
     }
 
-    function unpaperPage(infile, outfile, cb) {
-        exec('unpaper "'+infile+'" "'+outfile+'"', function(err, stdout, stderr) {
+    function unpaperPage(infile, pageimage, outdir, pagenum, cb) {
+        searchify.emit('cleanPage', { infile: infile, pagenum: pagenum, });
+        var cleanPageTime = process.hrtime();
+        var outfile = path.join(outdir, 'unpaper-'+pagenum+'.pnm');
+        exec('unpaper "'+pageimage+'" "'+outfile+'"', function(err, stdout, stderr) {
             if (err) {
                 return cb(err);
             } else {
-                return cb(null, outfile);
+                searchify.emit('pageCleaned', { infile: infile, pagenum: pagenum, time: process.hrtime(cleanPageTime), });
+                return cb(null, infile, outfile, outdir, pagenum);
             }
         });
     }
 
-    function ocrPage(infile, outfile, cb) {
+    function ocrPage(infile, pageimage, outdir, pagenum, cb) {
+        searchify.emit('ocrPage', { infile: infile, pagenum: pagenum, });
+        var ocrPageTime = process.hrtime();
+        var outfile = path.join(outdir, 'ocr-'+pagenum+'.hocr');
         var outfilebase = path.join(
             path.dirname(outfile),
             path.basename(outfile, '.hocr')
         );
-        exec('tesseract "'+infile+'" "'+outfilebase+'" hocr', function(err, stdout, stderr) {
+        exec('tesseract "'+pageimage+'" "'+outfilebase+'" hocr', function(err, stdout, stderr) {
             if (err) {
                 return cb(err);
             } else {
-                return cb(null, outfilebase+'.hocr');
+                searchify.emit('pageOcred', { infile: infile, pagenum: pagenum, time: process.hrtime(ocrPageTime), });
+                return cb(null, infile, pageimage, outfilebase+'.hocr', outdir, pagenum);
             }
         });
     }
 
-    function cleanHOCR(infile, outfile, cb) {
-        fs.readFile(infile, 'utf8', function(err, data) {
+    function cleanHOCR(infile, pageimage, hocrfile, outdir, pagenum, cb) {
+        searchify.emit('preparePage', { infile: infile, pagenum: pagenum, });
+        var preparePageTime = process.hrtime();
+        var outfile = path.join(outdir, 'ocr-fixed-'+pagenum+'.hocr');
+        fs.readFile(hocrfile, 'utf8', function(err, data) {
             if (err) {
                 return cb(err);
             }
@@ -81,17 +95,22 @@ function createPDFSearchify(options) {
                 if (err) {
                     return cb(err);
                 } else {
-                    return cb(null, outfile);
+                    searchify.emit('pagePrepared', { infile: infile, pagenum: pagenum, time: process.hrtime(preparePageTime), });
+                    return cb(null, infile, pageimage, outfile, outdir, pagenum);
                 }
             });
         });
     }
 
-    function composePage(basefile, hocrfile, outfile, cb) {
-        exec('hocr2pdf -i "'+basefile+'" -s -o "'+outfile+'" < "'+hocrfile+'"', function(err, stdout, stderr) {
+    function composePage(infile, pageimage, hocrfile, outdir, pagenum, cb) {
+        searchify.emit('composePage', { infile: infile, pagenum: pagenum, });
+        var composePageTime = process.hrtime();
+        var outfile = path.join(outdir, 'pdf-'+pagenum+'.pdf');
+        exec('hocr2pdf -i "'+pageimage+'" -s -o "'+outfile+'" < "'+hocrfile+'"', function(err, stdout, stderr) {
             if (err) {
                 return cb(err);
             } else {
+                searchify.emit('pageComposed', { infile: infile, pagenum: pagenum, time: process.hrtime(composePageTime), });
                 return cb(null, outfile);
             }
         });
@@ -116,77 +135,20 @@ function createPDFSearchify(options) {
 
     function searchifyPage(infile, tmpdir, pagenum, cb) {
         searchify.emit('startPage', { infile: infile, pagenum: pagenum, });
-        var originalfile
-          , unpaperfile
-          , ocrfile
-          , pdffile;
-        async.series([
-            function(cb) {
-                var extractPageTime = process.hrtime();
-                searchify.emit('extractPage', { infile: infile, pagenum: pagenum, });
-                extractPage(infile, tmpdir, pagenum, function(err, outfile) {
-                    if (err) {
-                        return cb(err);
-                    }
-                    originalfile = outfile;
-                    searchify.emit('pageExtracted', { infile: infile, pagenum: pagenum, time: process.hrtime(extractPageTime), });
-                    return cb();
-                });
-            },
-            function(cb) {
-                var cleanPageTime = process.hrtime();
-                searchify.emit('cleanPage', { infile: infile, pagenum: pagenum, });
-                var outfile = path.join(tmpdir, 'unpaper-'+pagenum+'.pnm');
-                unpaperPage(originalfile, outfile, function(err, outfile) {
-                    if (err) {
-                        return cb(err);
-                    }
-                    unpaperfile = outfile;
-                    searchify.emit('pageCleaned', { infile: infile, pagenum: pagenum, time: process.hrtime(cleanPageTime), });
-                    return cb();
-                });
-            },
-            function(cb) {
-                var ocrPageTime = process.hrtime();
-                searchify.emit('ocrPage', { infile: infile, pagenum: pagenum, });
-                var outfile = path.join(tmpdir, 'ocr-'+pagenum+'.hocr');
-                ocrPage(unpaperfile, outfile, function(err, outfile) {
-                    if (err) {
-                        return cb(err);
-                    }
-                    ocrfile = outfile;
-                    searchify.emit('pageOcred', { infile: infile, pagenum: pagenum, time: process.hrtime(ocrPageTime), });
-                    return cb();
-                });
-            },
-            function(cb) {
-                var preparePageTime = process.hrtime();
-                searchify.emit('preparePage', { infile: infile, pagenum: pagenum, });
-                var outfile = path.join(tmpdir, 'ocr-fixed-'+pagenum+'.hocr');
-                cleanHOCR(ocrfile, outfile, function(err, outfile) {
-                    if (err) {
-                        return cb(err);
-                    }
-                    ocrfile = outfile;
-                    searchify.emit('pagePrepared', { infile: infile, pagenum: pagenum, time: process.hrtime(preparePageTime), });
-                    return cb();
-                });
-            },
-            function(cb) {
-                var composePageTime = process.hrtime();
-                searchify.emit('composePage', { infile: infile, pagenum: pagenum, });
-                var outfile = path.join(tmpdir, 'pdf-'+pagenum+'.pdf');
-                composePage(unpaperfile, ocrfile, outfile, function(err, outfile) {
-                    if (err) {
-                        return cb(err);
-                    }
-                    pdffile = outfile;
-                    searchify.emit('pageComposed', { infile: infile, pagenum: pagenum, time: process.hrtime(composePageTime), });
-                    return cb();
-                });
-            },
-        ], function(err) {
-            return cb(err, pdffile);
+        var startPageTime = process.hrtime();
+        async.waterfall([
+            async.apply(extractPage, infile, tmpdir, pagenum),
+            unpaperPage,
+            ocrPage,
+            cleanHOCR,
+            composePage,
+        ], function(err, outfile) {
+            if (err) {
+                return cb(err);
+            } else {
+                searchify.emit('donePage', { infile: infile, pagenum: pagenum, time: process.hrtime(startPageTime), });
+                return cb(null, outfile);
+            }
         });
     }
 
@@ -207,14 +169,11 @@ function createPDFSearchify(options) {
                     (function() {
                         var pagenum = i;
                         tasks.push(function(cb) {
-                            var startPageTime = process.hrtime();
-                            searchify.emit('startPage', { infile: infile, pagenum: pagenum, });
                             searchifyPage(infile, tmpdir, pagenum, function(err, outfile) {
                                 if (err) {
                                     return cb(err);
                                 }
                                 pdfpages.push(outfile);
-                                searchify.emit('donePage', { infile: infile, pagenum: pagenum, time: process.hrtime(startPageTime), });
                                 return cb();
                             });
                         });
