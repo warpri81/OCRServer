@@ -21,6 +21,14 @@ function createPDFSearchify(options) {
     mixin(searchify, events.EventEmitter.prototype, false);
     return searchify;
 
+    function unlinkFilesCallback(files, cb) {
+        if (keepfiles) {
+            return cb()
+        } else {
+            return async.each(files, fs.unlink, cb);
+        }
+    }
+
     function getPDFPageCount(filename, cb) {
         exec('pdftk "'+filename+'" dump_data | grep "NumberOfPages" | cut -d":" -f2', function(err, stdout, stderr) {
             if (stdout) {
@@ -59,7 +67,9 @@ function createPDFSearchify(options) {
                 return cb(err);
             } else {
                 searchify.emit('pageCleaned', { infile: infile, pagenum: pagenum, time: process.hrtime(cleanPageTime), });
-                return cb(null, infile, outfile, outdir, pagenum);
+                return unlinkFilesCallback([pageimage], function(err) {
+                    return cb(err, infile, outfile, outdir, pagenum);
+                });
             }
         });
     }
@@ -96,7 +106,9 @@ function createPDFSearchify(options) {
                     return cb(err);
                 } else {
                     searchify.emit('pagePrepared', { infile: infile, pagenum: pagenum, time: process.hrtime(preparePageTime), });
-                    return cb(null, infile, pageimage, outfile, outdir, pagenum);
+                    return unlinkFilesCallback([hocrfile], function(err) {
+                        return cb(err, infile, pageimage, outfile, outdir, pagenum);
+                    });
                 }
             });
         });
@@ -111,7 +123,9 @@ function createPDFSearchify(options) {
                 return cb(err);
             } else {
                 searchify.emit('pageComposed', { infile: infile, pagenum: pagenum, time: process.hrtime(composePageTime), });
-                return cb(null, outfile);
+                return unlinkFilesCallback([pageimage, hocrfile], function(err) {
+                    return cb(err, outfile);
+                });
             }
         });
     }
@@ -188,7 +202,9 @@ function createPDFSearchify(options) {
                             return cb(err);
                         }
                         searchify.emit('done', { infile: infile, outfile: outfile, time: process.hrtime(startTime), });
-                        return cb();
+                        return unlinkFilesCallback(pdfpages, function(err) {
+                            return cb(err);
+                        });
                     });
                 });
             });
