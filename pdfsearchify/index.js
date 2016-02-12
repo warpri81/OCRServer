@@ -74,7 +74,21 @@ function createPDFSearchify(options) {
         });
     }
 
-    function ocrPage(infile, pageimage, outdir, pagenum, cb) {
+    function preprocessPage(infile, pageimage, outdir, pagenum, cb) {
+        searchify.emit('preprocessPage', { infile: infile, pagenum: pagenum, });
+        var preprocessPageTime = process.hrtime();
+        var outfile = path.join(outdir, 'preprocessed-'+pagenum+'.pnm');
+        exec('convert "'+pageimage+'" -type grayscale -blur 1x65000 -contrast -normalize -despeckle -despeckle -threshold 50% "'+outfile+'"', function(err, stdout, stderr) {
+            if (err) {
+                return cb(err);
+            } else {
+                searchify.emit('pagePreprocessed', { infile: infile, pagenum: pagenum, time: process.hrtime(preprocessPageTime), });
+                return cb(null, infile, pageimage, outfile, outdir, pagenum);
+            }
+        });
+    }
+
+    function ocrPage(infile, pageimage, preprocimage, outdir, pagenum, cb) {
         searchify.emit('ocrPage', { infile: infile, pagenum: pagenum, });
         var ocrPageTime = process.hrtime();
         var outfile = path.join(outdir, 'ocr-'+pagenum+'.hocr');
@@ -82,12 +96,14 @@ function createPDFSearchify(options) {
             path.dirname(outfile),
             path.basename(outfile, '.hocr')
         );
-        exec('tesseract "'+pageimage+'" "'+outfilebase+'" hocr', function(err, stdout, stderr) {
+        exec('tesseract "'+preprocimage+'" "'+outfilebase+'" hocr', function(err, stdout, stderr) {
             if (err) {
                 return cb(err);
             } else {
                 searchify.emit('pageOcred', { infile: infile, pagenum: pagenum, time: process.hrtime(ocrPageTime), });
-                return cb(null, infile, pageimage, outfilebase+'.hocr', outdir, pagenum);
+                return unlinkFilesCallback([preprocimage], function(err) {
+                    return cb(err, infile, pageimage, outfilebase+'.hocr', outdir, pagenum);
+                });
             }
         });
     }
@@ -153,6 +169,7 @@ function createPDFSearchify(options) {
         async.waterfall([
             async.apply(extractPage, infile, tmpdir, pagenum),
             unpaperPage,
+            preprocessPage,
             ocrPage,
             cleanHOCR,
             composePage,
