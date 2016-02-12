@@ -79,13 +79,11 @@ function fileExists(filepath) {
 
 function getEmptyPath(filepath) {
     var parsedPath = path.parse(filepath);
-    var copyPath = parsedPath;
+    var copyPath = path.parse(filepath);
     var copy = 0;
     while (fileExists(path.format(copyPath))) {
         ++copy;
-        copyPath = parsedPath;
-        copyPath.name = ('%s(%d)', parsedPath.name, copy);
-        console.log(copyPath.name);
+        copyPath.name = parsedPath.name+'('+copy+')';
         copyPath.base = copyPath.name + copyPath.ext;
     }
     return path.format(copyPath);
