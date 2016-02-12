@@ -3,7 +3,7 @@ var async = require('async');
 var pdfsearchify = require('./pdfsearchify')();
 var chokidar = require('chokidar');
 
-var opt_path = process.argv[2];
+var optpath = process.argv[2];
 var options = {};
 var filelist = [];
 var started = false;
@@ -17,45 +17,33 @@ function start() {
     setOptions(startWatcher);
 }
 
+function validateOptionPath(folderpath, foldertype) {
+    if (!options.hasOwnProperty(foldertype)) {
+        console.log('The settingsfile must name a ' + foldertype);
+        exit();
+    }
+    fs.lstat(folderpath, function(err, stats) {
+        if (err || !stats.isDirectory()) {
+            console.log(foldertype + ' must be a valid directory');
+            exit();
+        }
+    });
+}
+
 function setOptions(callback) {
-    if (!opt_path) {
-        console.log('You must pass a path to an options file');
+    if (!optpath) {
+        console.log('You must pass a path to an settings file');
         exit();
     }
-
     try {
-        options = require(opt_path);
+        options = require(optpath);
     } catch (e) {
-        console.log('The path passed must lead to a valid JSON file');
+        console.log('The settings file must be a valid JSON file');
         exit();
     }
-
-    if (!options.hasOwnProperty('watchpath')) {
-        console.log('The JSON file must have a key/value pair for a directory ("watchpath") to monitor');
-        exit();
-    }
-
-    if (!options.hasOwnProperty('finishpath')) {
-        console.log('The JSON file must have a key/value pair for a directory ("finishpath") to deposit OCRed docs');
-        exit();
-    }
-
-    fs.lstat(options.watchpath, function(err, stats) {
-        if (err || !stats.isDirectory()) {
-            console.log('The watchpath must be a valid directory');
-            exit();
-        }
-    });
-
-    fs.lstat(options.finishpath, function(err, stats) {
-        if (err || !stats.isDirectory()) {
-            console.log('The finishpath must be a valid directory');
-            exit();
-        }
-        if (options.finishpath[-1] !== '/') {
-            options.finishpath += '/';
-        }
-    });
+    validateOptionPath(options.watchpath, 'watchpath');
+    validateOptionPath(options.finishpath, 'finishpath');
+    validateOptionPath(options.errorpath, 'errorpath');
 
     callback();
 
