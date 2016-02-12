@@ -2,6 +2,8 @@ var fs = require('fs');
 var async = require('async');
 var pdfsearchify = require('./pdfsearchify')();
 var chokidar = require('chokidar');
+var path = require('path');
+var mkdirp = require('mkdirp');
 
 var optpath = process.argv[2];
 var options = {};
@@ -22,6 +24,7 @@ function validateOptionPath(folderpath, foldertype) {
         console.log('The settingsfile must name a ' + foldertype);
         exit();
     }
+    options[foldertype] = path.normalize(options[foldertype]);
     fs.lstat(folderpath, function(err, stats) {
         if (err || !stats.isDirectory()) {
             console.log(foldertype + ' must be a valid directory');
@@ -49,8 +52,7 @@ function setOptions(callback) {
 
 }
 
-function addFile(path) {
-    var filepath = path.replace(options.watchpath, '');
+function addFile(filepath) {
     filelist.push(filepath);
 
     if (started && filelist.length === 1) {
@@ -59,17 +61,106 @@ function addFile(path) {
     
 }
 
-function removeFile(path) {
-    var ind = filelist.indexOf(path);
+function removeFile(filepath) {
+    var ind = filelist.indexOf(filepath);
     if (ind > -1) {
         filelist.splice(ind, 1);
     }
 }
 
+function fileExists(filepath) {
+    try {
+        fs.statSync(filepath)
+        return true;
+    } catch(e) {
+        return false;
+    }
+}
+
+function getEmptyPath(filepath) {
+    var parsedPath = path.parse(filepath);
+    var copyPath = parsedPath;
+    var copy = 0;
+    while (fileExists(path.format(copyPath))) {
+        ++copy;
+        copyPath = parsedPath;
+        copyPath.name = ('%s(%d)', parsedPath.name, copy);
+        console.log(copyPath.name);
+        copyPath.base = copyPath.name + copyPath.ext;
+    }
+    return path.format(copyPath);
+}
+
+function copyFile(source, target) {
+    console.log('Moving file from %s to %s', source, target);
+    var cbCalled = false;
+    var rd = fs.createReadStream(source);
+    rd.on("error", function(err) { done(err); });
+
+    var wr = fs.createWriteStream(target);
+    wr.on("error", function(err) { done(err); });
+    wr.on("close", function(ex) { done(); });
+
+    rd.pipe(wr);
+
+    function done(err) {
+        if(!cbCalled) {
+            cbCalled = true;
+            if(err) {
+                console.log('Could not move file %s to %s', source, target);
+            } else {
+                unlinkFile(source, target);
+            }
+        }
+    }
+}
+
+function ensureDirPath(filepath) {
+    console.log('Ensuring a path to %s', filepath);
+    dirpath = path.dirname(filepath);
+    mkdirp(dirpath, function(err) {
+        if (err) {
+            console.log('Could not make a directory path for %s', dirpath);
+        }
+    });
+}
+
+function unlinkFile(target, newLocation) {
+    console.log('Removing %s. This file should exist at %s', target, newLocation);
+    var dirname = path.dirname(target);
+    if (!fileExists(newLocation)) {
+        console.log('%s has not been moved to %s', target, newLocation);
+        console.log('Not deleting %s', target);
+    } else {
+        fs.unlink(target);
+        checkDeleteDirectory(dirname);
+    }
+}
+
+function checkDeleteDirectory(dirname) {
+    var dirname = path.normalize(dirname + '/');
+    var watchpath = path.normalize(options.watchpath + '/');
+    
+    if (dirname != watchpath) {
+        console.log('DIRNAME: %s', dirname);
+        console.log('WATCHPATH: %s', watchpath);
+        console.log('Attempting to delete directory %s', dirname);
+        try {
+            fs.rmdirSync(dirname);
+            checkDeleteDirectory(path.normalize(dirname+'/..'));
+            console.log('Directory %s deleted', dirname);
+        } catch (e) {
+            console.log('Could not delete directory %s', dirname);
+        }
+    }
+}
+
+    
+
 function startWatcher() {
     watcher = chokidar.watch(options.watchpath, { persistent: true });
-    watcher.on('add', function(path) { addFile(path); });
-    watcher.on('unlink', function(path) { removeFile(path); });
+    watcher.on('add', function(filepath) { addFile(filepath); });
+    watcher.on('unlink', function(filepath) { removeFile(filepath); });
     watcher.on('ready', function() {
         ManagePDFSearchify();
         started = true;
@@ -102,13 +193,20 @@ function setPDFSearchifyListeners() {
 function ManagePDFSearchify() {
     if (!processing && filelist.length > 0) {
         processing = true;
-        file = filelist[0];
+        inpath = filelist[0];
+        relativepath = path.normalize(inpath.replace(options.watchpath,''));
+        outpath = getEmptyPath(path.normalize(path.join(options.finishpath, relativepath)));
+        ensureDirPath(outpath);
 
-        pdfsearchify(options.watchpath + file, options.finishpath + file, function(err) {
+        pdfsearchify(inpath, outpath, function(err) {
             if (err) {
                 console.log('ERROR: '+err);
+                errorpath = getEmptyPath(path.join(options.errorpath, relativepath));
+                ensureDirPath(errorpath);
+                copyFile(inpath, errorpath);
             } else {
                 console.log('Everything is OK');
+                unlinkFile(inpath, outpath);
             }
             filelist.shift();
             processing = false;
