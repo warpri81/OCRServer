@@ -11,6 +11,7 @@ function createPDFSearchify(options) {
 
     options = options || {};
     var upsample = options.upsample || 300;
+    var optimize = options.optimize || 'default'; // screen, ebook, prepress, default
     var keepfiles = options.keepfiles || false;
 
     var tmp = require('tmp');
@@ -152,6 +153,7 @@ function createPDFSearchify(options) {
         var infileargs = infiles.map(function(infile) { return '"'+infile+'"'; }).join(' ');
         exec(
             'gs -dNOPAUSE -dSAFER -sDEVICE=pdfwrite '+
+            '-dCompatibilityLevel=1.4 -dPDFSETTINGS=/'+optimize+' '+
             '-dBatch -o "'+outfile+'" '+infileargs,
             function(err, stdout, stderr) {
                 if (err) {
