@@ -11,6 +11,7 @@ function createPDFSearchify(options) {
 
     options = options || {};
     var upsample = options.upsample || 300;
+    var optimize = options.optimize || 'default'; // screen, ebook, prepress, default
     var keepfiles = options.keepfiles || false;
 
     var tmp = require('tmp');
@@ -58,15 +59,15 @@ function createPDFSearchify(options) {
         );
     }
 
-    function unpaperPage(infile, pageimage, outdir, pagenum, cb) {
-        searchify.emit('cleanPage', { infile: infile, pagenum: pagenum, });
-        var cleanPageTime = process.hrtime();
-        var outfile = path.join(outdir, 'unpaper-'+pagenum+'.pnm');
-        exec('unpaper "'+pageimage+'" "'+outfile+'"', function(err, stdout, stderr) {
+    function deskewPage(infile, pageimage, outdir, pagenum, cb) {
+        searchify.emit('deskewPage', { infile: infile, pagenum: pagenum, });
+        var deskewPageTime = process.hrtime();
+        var outfile = path.join(outdir, 'deskew-'+pagenum+'.pnm');
+        exec('convert "'+pageimage+'" -deskew 40% "'+outfile+'"', function(err, stdout, stderr) {
             if (err) {
                 return cb(err);
             } else {
-                searchify.emit('pageCleaned', { infile: infile, pagenum: pagenum, time: process.hrtime(cleanPageTime), });
+                searchify.emit('pageDeskewed', { infile: infile, pagenum: pagenum, time: process.hrtime(deskewPageTime), });
                 return unlinkFilesCallback([pageimage], function(err) {
                     return cb(err, infile, outfile, outdir, pagenum);
                 });
@@ -108,33 +109,11 @@ function createPDFSearchify(options) {
         });
     }
 
-    function cleanHOCR(infile, pageimage, hocrfile, outdir, pagenum, cb) {
-        searchify.emit('preparePage', { infile: infile, pagenum: pagenum, });
-        var preparePageTime = process.hrtime();
-        var outfile = path.join(outdir, 'ocr-fixed-'+pagenum+'.hocr');
-        fs.readFile(hocrfile, 'utf8', function(err, data) {
-            if (err) {
-                return cb(err);
-            }
-            var result = data.replace(/='[^"]+'/g, function(s) { return s.replace(/'/g, '"'); });
-            fs.writeFile(outfile, result, 'utf8', function(err) {
-                if (err) {
-                    return cb(err);
-                } else {
-                    searchify.emit('pagePrepared', { infile: infile, pagenum: pagenum, time: process.hrtime(preparePageTime), });
-                    return unlinkFilesCallback([hocrfile], function(err) {
-                        return cb(err, infile, pageimage, outfile, outdir, pagenum);
-                    });
-                }
-            });
-        });
-    }
-
     function composePage(infile, pageimage, hocrfile, outdir, pagenum, cb) {
         searchify.emit('composePage', { infile: infile, pagenum: pagenum, });
         var composePageTime = process.hrtime();
         var outfile = path.join(outdir, 'pdf-'+pagenum+'.pdf');
-        exec('hocr2pdf -i "'+pageimage+'" -s -o "'+outfile+'" < "'+hocrfile+'"', function(err, stdout, stderr) {
+        exec('python utils/hocr-pdf "'+pageimage+'" "'+hocrfile+'" "'+outfile+'" '+upsample, function(err, stdout, stderr) {
             if (err) {
                 return cb(err);
             } else {
@@ -152,6 +131,7 @@ function createPDFSearchify(options) {
         var infileargs = infiles.map(function(infile) { return '"'+infile+'"'; }).join(' ');
         exec(
             'gs -dNOPAUSE -dSAFER -sDEVICE=pdfwrite '+
+            '-dCompatibilityLevel=1.4 -dPDFSETTINGS=/'+optimize+' '+
             '-dBatch -o "'+outfile+'" '+infileargs,
             function(err, stdout, stderr) {
                 if (err) {
@@ -168,10 +148,9 @@ function createPDFSearchify(options) {
         var startPageTime = process.hrtime();
         async.waterfall([
             async.apply(extractPage, infile, tmpdir, pagenum),
-            unpaperPage,
+            deskewPage,
             preprocessPage,
             ocrPage,
-            cleanHOCR,
             composePage,
         ], function(err, outfile) {
             if (err) {
