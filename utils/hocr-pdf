@@ -31,34 +31,29 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from xml.etree.ElementTree import ElementTree, ParseError
 
-def export_pdf(playground, default_dpi):
+def export_pdf(image, hocrfile, pdffile, default_dpi):
   """Create a searchable PDF from a pile of HOCR + JPEG"""
   load_invisible_font()
-  pdf = Canvas(sys.stdout, pageCompression=1)
-  pdf.setCreator('hocr-tools')
-  pdf.setTitle(os.path.basename(playground))
-  images = sorted(glob.glob(os.path.join(playground, '*.jpg')))
+  pdf = Canvas(pdffile, pageCompression=1)
   dpi = default_dpi
-  for image in images:
-    im = Image.open(image)
-    w, h = im.size
-    try:
-      dpi = im.info['dpi'][0]
-    except KeyError:
-      pass
-    width = w * 72 / dpi
-    height = h * 72 / dpi
-    pdf.setPageSize((width, height))
-    pdf.drawImage(image, 0, 0, width=width, height=height)
-    add_text_layer(pdf, image, height, dpi)
-    pdf.showPage()
+  im = Image.open(image)
+  w, h = im.size
+  try:
+    dpi = im.info['dpi'][0]
+  except KeyError:
+    pass
+  width = w * 72 / dpi
+  height = h * 72 / dpi
+  pdf.setPageSize((width, height))
+  pdf.drawImage(image, 0, 0, width=width, height=height)
+  add_text_layer(pdf, image, hocrfile, height, dpi)
+  pdf.showPage()
   pdf.save()
 
-def add_text_layer(pdf, image, height, dpi):
+def add_text_layer(pdf, image, hocrfile, height, dpi):
   """Draw an invisible text layer for OCR data"""
   p1 = re.compile('bbox((\s+\d+){4})')
   p2 = re.compile('baseline((\s+[\d\.\-]+){2})')
-  hocrfile = os.path.splitext(image)[0] + ".hocr"
   hocr = ElementTree()
   hocr.parse(hocrfile)
   for line in hocr.findall(".//{http://www.w3.org/1999/xhtml}span"):
@@ -132,6 +127,6 @@ CMGjwvxTsr74/f/F95m3TH9x8o0/TU//N+7/D/ScVcA=
 
 if __name__ == "__main__":
   if len(sys.argv) == 1:
-    print("Usage: %s <imgdir>\n" % os.path.basename(sys.argv[0]))
+    print("Usage: %s <source image> <hocr file> <output pdf> [dpi]\n" % os.path.basename(sys.argv[0]))
   else:
-    export_pdf(sys.argv[1], 300)
+    export_pdf(sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]) if len(sys.argv) > 4 else 300)
