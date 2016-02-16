@@ -59,15 +59,15 @@ function createPDFSearchify(options) {
         );
     }
 
-    function unpaperPage(infile, pageimage, outdir, pagenum, cb) {
-        searchify.emit('cleanPage', { infile: infile, pagenum: pagenum, });
-        var cleanPageTime = process.hrtime();
-        var outfile = path.join(outdir, 'unpaper-'+pagenum+'.pnm');
-        exec('unpaper "'+pageimage+'" "'+outfile+'"', function(err, stdout, stderr) {
+    function deskewPage(infile, pageimage, outdir, pagenum, cb) {
+        searchify.emit('deskewPage', { infile: infile, pagenum: pagenum, });
+        var deskewPageTime = process.hrtime();
+        var outfile = path.join(outdir, 'deskew-'+pagenum+'.pnm');
+        exec('convert "'+pageimage+'" -deskew 40% "'+outfile+'"', function(err, stdout, stderr) {
             if (err) {
                 return cb(err);
             } else {
-                searchify.emit('pageCleaned', { infile: infile, pagenum: pagenum, time: process.hrtime(cleanPageTime), });
+                searchify.emit('pageDeskewed', { infile: infile, pagenum: pagenum, time: process.hrtime(deskewPageTime), });
                 return unlinkFilesCallback([pageimage], function(err) {
                     return cb(err, infile, outfile, outdir, pagenum);
                 });
@@ -170,7 +170,7 @@ function createPDFSearchify(options) {
         var startPageTime = process.hrtime();
         async.waterfall([
             async.apply(extractPage, infile, tmpdir, pagenum),
-            unpaperPage,
+            deskewPage,
             preprocessPage,
             ocrPage,
             cleanHOCR,

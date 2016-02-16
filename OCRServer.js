@@ -16,8 +16,8 @@ pdfsearchify.on('startPage', function(o) { console.log('Starting page: '+o.pagen
 pdfsearchify.on('donePage', function(o) { console.log('Done page: '+o.pagenum+' ('+hrTimeString(o.time)+')'); });
 pdfsearchify.on('extractPage', function(o) { console.log('Extracting page: '+o.pagenum); });
 pdfsearchify.on('pageExtracted', function(o) { console.log('Extracted page: '+o.pagenum+' ('+hrTimeString(o.time)+')'); });
-pdfsearchify.on('cleanPage', function(o) { console.log('Cleaning page: '+o.pagenum); });
-pdfsearchify.on('pageCleaned', function(o) { console.log('Cleaned page: '+o.pagenum+' ('+hrTimeString(o.time)+')'); });
+pdfsearchify.on('deskewPage', function(o) { console.log('Deskewing page: '+o.pagenum); });
+pdfsearchify.on('pageDeskewed', function(o) { console.log('Deskewed page: '+o.pagenum+' ('+hrTimeString(o.time)+')'); });
 pdfsearchify.on('preprocessPage', function(o) { console.log('Preprocessing page: '+o.pagenum); });
 pdfsearchify.on('pagePreprocessed', function(o) { console.log('Preprocessed page: '+o.pagenum+' ('+hrTimeString(o.time)+')'); });
 pdfsearchify.on('ocrPage', function(o) { console.log('Ocring page: '+o.pagenum); });
