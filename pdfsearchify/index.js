@@ -109,33 +109,11 @@ function createPDFSearchify(options) {
         });
     }
 
-    function cleanHOCR(infile, pageimage, hocrfile, outdir, pagenum, cb) {
-        searchify.emit('preparePage', { infile: infile, pagenum: pagenum, });
-        var preparePageTime = process.hrtime();
-        var outfile = path.join(outdir, 'ocr-fixed-'+pagenum+'.hocr');
-        fs.readFile(hocrfile, 'utf8', function(err, data) {
-            if (err) {
-                return cb(err);
-            }
-            var result = data.replace(/='[^"]+'/g, function(s) { return s.replace(/'/g, '"'); });
-            fs.writeFile(outfile, result, 'utf8', function(err) {
-                if (err) {
-                    return cb(err);
-                } else {
-                    searchify.emit('pagePrepared', { infile: infile, pagenum: pagenum, time: process.hrtime(preparePageTime), });
-                    return unlinkFilesCallback([hocrfile], function(err) {
-                        return cb(err, infile, pageimage, outfile, outdir, pagenum);
-                    });
-                }
-            });
-        });
-    }
-
     function composePage(infile, pageimage, hocrfile, outdir, pagenum, cb) {
         searchify.emit('composePage', { infile: infile, pagenum: pagenum, });
         var composePageTime = process.hrtime();
         var outfile = path.join(outdir, 'pdf-'+pagenum+'.pdf');
-        exec('hocr2pdf -i "'+pageimage+'" -s -o "'+outfile+'" < "'+hocrfile+'"', function(err, stdout, stderr) {
+        exec('python utils/hocr-pdf "'+pageimage+'" "'+hocrfile+'" "'+outfile+'" '+upsample, function(err, stdout, stderr) {
             if (err) {
                 return cb(err);
             } else {
@@ -173,7 +151,6 @@ function createPDFSearchify(options) {
             deskewPage,
             preprocessPage,
             ocrPage,
-            cleanHOCR,
             composePage,
         ], function(err, outfile) {
             if (err) {
