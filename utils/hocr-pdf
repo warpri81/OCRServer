@@ -66,6 +66,7 @@ def add_text_layer(pdf, image, hocrfile, height, dpi):
       baseline = [ 0, 0 ]
     linebox = [float(i) for i in linebox]
     baseline = [float(i) for i in baseline]
+    rawtext = ''
     for word in line:
       if word.attrib['class'] != 'ocrx_word':
         continue
