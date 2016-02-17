@@ -24,33 +24,40 @@ import cStringIO
 import base64
 import zlib
 import re
+import StringIO
 
 from PIL import Image
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from xml.etree.ElementTree import ElementTree, ParseError
+from pyPdf import PdfFileWriter, PdfFileReader
 
-def export_pdf(image, hocrfile, pdffile, default_dpi):
+def export_pdf(infile, hocrfile, pdffile, default_dpi):
   """Create a searchable PDF from a pile of HOCR + JPEG"""
-  load_invisible_font()
-  pdf = Canvas(pdffile, pageCompression=1)
+  packet = StringIO.StringIO()
+  original_pdf = PdfFileReader(file(infile, "rb"))
+  can = Canvas(packet, pageCompression=1)
   dpi = default_dpi
-  im = Image.open(image)
-  w, h = im.size
-  try:
-    dpi = im.info['dpi'][0]
-  except KeyError:
-    pass
-  width = w * 72 / dpi
-  height = h * 72 / dpi
-  pdf.setPageSize((width, height))
-  pdf.drawImage(image, 0, 0, width=width, height=height)
-  add_text_layer(pdf, image, hocrfile, height, dpi)
-  pdf.showPage()
-  pdf.save()
+  orig_mediabox = original_pdf.getPage(0).mediaBox
+  width = orig_mediabox[2]
+  height = orig_mediabox[3]
+  can.setPageSize((width, height))
+  add_text_layer(can, hocrfile, height, dpi)
+  can.showPage()
+  can.save()
 
-def add_text_layer(pdf, image, hocrfile, height, dpi):
+  packet.seek(0)
+  new_pdf = PdfFileReader(packet)
+  output = PdfFileWriter()
+  page = original_pdf.getPage(0)
+  page.mergePage(new_pdf.getPage(0))
+  output.addPage(page)
+  outputStream = file(pdffile, "wb")
+  output.write(outputStream)
+  outputStream.close()
+
+def add_text_layer(can, hocrfile, height, dpi):
   """Draw an invisible text layer for OCR data"""
   p1 = re.compile('bbox((\s+\d+){4})')
   p2 = re.compile('baseline((\s+[\d\.\-]+){2})')
@@ -78,20 +85,20 @@ def add_text_layer(pdf, image, hocrfile, height, dpi):
             rawtext = innerword.text.strip()
         except:
           continue
-      font_width = pdf.stringWidth(rawtext, 'invisible', 8)
+      font_width = can.stringWidth(rawtext, 'Courier', 8)
       if font_width <= 0:
         continue
       box = p1.search(word.attrib['title']).group(1).split()
       box = [float(i) for i in box]
       b = polyval(baseline, (box[0] + box[2]) / 2 - linebox[0]) + linebox[3]
-      text = pdf.beginText()
+      text = can.beginText()
       text.setTextRenderMode(3)  # double invisible
-      text.setFont('invisible', 8)
+      text.setFont('Courier', 8)
       text.setTextOrigin(box[0] * 72 / dpi, height - b * 72 / dpi)
       box_width = (box[2] - box[0]) * 72 / dpi
       text.setHorizScale(100.0 * box_width / font_width)
       text.textLine(rawtext)
-      pdf.drawText(text)
+      can.drawText(text)
 
 def polyval(poly, x):
   return x * poly[0] + poly[1]

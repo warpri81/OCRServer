@@ -113,7 +113,8 @@ function createPDFSearchify(options) {
         searchify.emit('composePage', { infile: infile, pagenum: pagenum, });
         var composePageTime = process.hrtime();
         var outfile = path.join(outdir, 'pdf-'+pagenum+'.pdf');
-        exec('python utils/hocr-pdf "'+pageimage+'" "'+hocrfile+'" "'+outfile+'" '+upsample, function(err, stdout, stderr) {
+        console.log('python utils/hocr-pdf "'+infile+'" "'+hocrfile+'" "'+outfile+'" '+upsample);
+        exec('python utils/hocr-pdf "'+infile+'" "'+hocrfile+'" "'+outfile+'" '+upsample, function(err, stdout, stderr) {
             if (err) {
                 return cb(err);
             } else {
