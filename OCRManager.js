@@ -177,8 +177,10 @@ function setPDFSearchifyListeners() {
     pdfsearchify.on('composed', function(o) { console.log('Composed: '+o.outfile+' ('+hrTimeString(o.time)+')'); });
     pdfsearchify.on('startPage', function(o) { console.log('Starting page: '+o.pagenum); });
     pdfsearchify.on('donePage', function(o) { console.log('Done page: '+o.pagenum+' ('+hrTimeString(o.time)+')'); });
-    pdfsearchify.on('extractPage', function(o) { console.log('Extracting page: '+o.pagenum); });
-    pdfsearchify.on('pageExtracted', function(o) { console.log('Extracted page: '+o.pagenum+' ('+hrTimeString(o.time)+')'); });
+    pdfsearchify.on('extractPNM', function(o) { console.log('Extracting pnm: '+o.pagenum); });
+    pdfsearchify.on('PNMExtracted', function(o) { console.log('Extracted pnm: '+o.pagenum+' ('+hrTimeString(o.time)+')'); });
+    pdfsearchify.on('extractPDF', function(o) { console.log('Extracting pdf: '+o.pagenum); });
+    pdfsearchify.on('PDFExtracted', function(o) { console.log('Extracted pdf: '+o.pagenum+' ('+hrTimeString(o.time)+')'); });
     pdfsearchify.on('cleanPage', function(o) { console.log('Cleaning page: '+o.pagenum); });
     pdfsearchify.on('pageCleaned', function(o) { console.log('Cleaned page: '+o.pagenum+' ('+hrTimeString(o.time)+')'); });
     pdfsearchify.on('ocrPage', function(o) { console.log('Ocring page: '+o.pagenum); });
