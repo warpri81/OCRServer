@@ -40,6 +40,23 @@ function createPDFSearchify(options) {
         });
     }
 
+    function dumpPDFInfo(filename, outdir, cb) {
+        var outfile = path.join(outdir, 'pdfinfo.txt');
+        exec('pdftk "'+filename+'" dump_data output "'+outfile+'"', function(err, stdout, stderr) {
+            if (err) {
+                return cb(err);
+            } else {
+                return cb(null, filename, outfile);
+            }
+        });
+    }
+
+    function updatePDFInfo(infile, infofile, outfile, cb) {
+        exec('pdftk "'+infile+'" update_info "'+infofile+'" output "'+outfile+'"', function(err, stdout, stderr) {
+            return cb(err);
+        });
+    }
+
     function extractPage(infile, outdir, pagenum, cb) {
         searchify.emit('extractPage', { infile: infile, pagenum: pagenum, });
         var extractPageTime = process.hrtime();
@@ -125,20 +142,25 @@ function createPDFSearchify(options) {
         });
     }
 
-    function composePDF(infiles, outfile, cb) {
+    function composePDF(infiles, pdfinfofile, outdir, outfile, cb) {
         var composeTime = process.hrtime();
+        var tempoutfile = path.join(outdir, 'composed.pdf');
         searchify.emit('compose', { outfile: outfile, });
         var infileargs = infiles.map(function(infile) { return '"'+infile+'"'; }).join(' ');
         exec(
             'gs -dNOPAUSE -dSAFER -sDEVICE=pdfwrite '+
             '-dCompatibilityLevel=1.4 -dPDFSETTINGS=/'+optimize+' '+
-            '-dBatch -o "'+outfile+'" '+infileargs,
+            '-dBatch -o "'+tempoutfile+'" '+infileargs,
             function(err, stdout, stderr) {
                 if (err) {
                     return cb(err);
                 }
-                searchify.emit('composed', { outfile: outfile, time: process.hrtime(composeTime), });
-                return cb(null, outfile);
+                updatePDFInfo(tempoutfile, pdfinfofile, outfile, function(err) {
+                    searchify.emit('composed', { outfile: outfile, time: process.hrtime(composeTime), });
+                    return unlinkFilesCallback([tempoutfile, pdfinfofile], function(err) {
+                        return cb(null, outfile);
+                    });
+                });
             }
         );
     }
@@ -174,32 +196,37 @@ function createPDFSearchify(options) {
                 if (err) {
                     return cb(err);
                 }
-                var tasks = [];
-                for (var i = 1; i <= pagecount; i++) {
-                    (function() {
-                        var pagenum = i;
-                        tasks.push(function(cb) {
-                            searchifyPage(infile, tmpdir, pagenum, function(err, outfile) {
-                                if (err) {
-                                    return cb(err);
-                                }
-                                pdfpages.push(outfile);
-                                return cb();
-                            });
-                        });
-                    })();
-                }
-                async.series(tasks, function(err) {
+                dumpPDFInfo(infile, tmpdir, function(err, infile, pdfinfofile) {
                     if (err) {
                         return cb(err);
                     }
-                    composePDF(pdfpages, outfile, function(err, outfile) {
+                    var tasks = [];
+                    for (var i = 1; i <= pagecount; i++) {
+                        (function() {
+                            var pagenum = i;
+                            tasks.push(function(cb) {
+                                searchifyPage(infile, tmpdir, pagenum, function(err, outfile) {
+                                    if (err) {
+                                        return cb(err);
+                                    }
+                                    pdfpages.push(outfile);
+                                    return cb();
+                                });
+                            });
+                        })();
+                    }
+                    async.series(tasks, function(err) {
                         if (err) {
                             return cb(err);
                         }
-                        searchify.emit('done', { infile: infile, outfile: outfile, time: process.hrtime(startTime), });
-                        return unlinkFilesCallback(pdfpages, function(err) {
-                            return cb(err);
+                        composePDF(pdfpages, pdfinfofile, tmpdir, outfile, function(err, outfile) {
+                            if (err) {
+                                return cb(err);
+                            }
+                            searchify.emit('done', { infile: infile, outfile: outfile, time: process.hrtime(startTime), });
+                            return unlinkFilesCallback(pdfpages, function(err) {
+                                return cb(err);
+                            });
                         });
                     });
                 });
