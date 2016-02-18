@@ -33,7 +33,7 @@ from xml.etree.ElementTree import ElementTree, ParseError
 
 def export_pdf(image, hocrfile, pdffile, default_dpi):
   """Create a searchable PDF from a pile of HOCR + JPEG"""
-  load_invisible_font()
+  #load_invisible_font()
   pdf = Canvas(pdffile, pageCompression=1)
   dpi = default_dpi
   im = Image.open(image)
@@ -79,7 +79,8 @@ def add_text_layer(pdf, image, hocrfile, height, dpi):
             rawtext = innerword.text.strip()
         except:
           continue
-      font_width = pdf.stringWidth(rawtext, 'invisible', 8)
+      #font_width = pdf.stringWidth(rawtext, 'invisible', 8)
+      font_width = pdf.stringWidth(rawtext, 'Courier', 8)
       if font_width <= 0:
         continue
       box = p1.search(word.attrib['title']).group(1).split()
@@ -87,7 +88,8 @@ def add_text_layer(pdf, image, hocrfile, height, dpi):
       b = polyval(baseline, (box[0] + box[2]) / 2 - linebox[0]) + linebox[3]
       text = pdf.beginText()
       text.setTextRenderMode(3)  # double invisible
-      text.setFont('invisible', 8)
+      #text.setFont('invisible', 8)
+      text.setFont('Courier', 8)
       text.setTextOrigin(box[0] * 72 / dpi, height - b * 72 / dpi)
       box_width = (box[2] - box[0]) * 72 / dpi
       text.setHorizScale(100.0 * box_width / font_width)
