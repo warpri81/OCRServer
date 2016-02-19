@@ -1,177 +1,113 @@
 var fs = require('fs');
 var async = require('async');
-var pdfsearchify = require('./pdfsearchify')();
 var chokidar = require('chokidar');
 var path = require('path');
 var mkdirp = require('mkdirp');
+var pdfsearchify;
 
-var optpath = process.argv[2];
-var options = {};
-var filelist = [];
-var started = false;
-var processing = false;
-var running = true;
+var settingspath = process.argv[2];
+var settings = {};
 var watcher;
+var q;
 
+var requiredPaths = ['watchpath', 'processpath', 'finishpath', 'errorpath'];
+var optionalPaths = ['keeppath'];
+var optionalInts = ['workers'];
 
 function start() {
-    setPDFSearchifyListeners();
-    setOptions(startWatcher);
-}
-
-function validateOptionPath(folderpath, foldertype) {
-    if (!options.hasOwnProperty(foldertype)) {
-        console.log('The settingsfile must name a ' + foldertype);
-        exit();
-    }
-    options[foldertype] = path.normalize(options[foldertype] + '/');
-    fs.lstat(folderpath, function(err, stats) {
-        if (err || !stats.isDirectory()) {
-            console.log(foldertype + ' must be a valid directory');
-            exit();
-        }
-    });
-}
-
-function setOptions(cb) {
-    if (!optpath) {
-        console.log('You must pass a path to an settings file');
-        exit();
-    }
-    try {
-        options = require(optpath);
-    } catch (e) {
-        console.log('The settings file must be a valid JSON file');
-        exit();
-    }
-    validateOptionPath(options.watchpath, 'watchpath');
-    validateOptionPath(options.processpath, 'processpath');
-    validateOptionPath(options.finishpath, 'finishpath');
-    validateOptionPath(options.errorpath, 'errorpath');
-
-    cb();
-}
-
-function addFile(filepath) {
-    filelist.push(filepath);
-
-    if (started && filelist.length === 1) {
-        ManagePDFSearchify();
-    }
-}
-
-function removeFile(filepath) {
-    var ind = filelist.indexOf(filepath);
-    if (ind > -1) {
-        filelist.splice(ind, 1);
-    }
-}
-
-function fileExists(filepath) {
-    try {
-        fs.statSync(filepath)
-        return true;
-    } catch(e) {
-        return false;
-    }
-}
-
-function getEmptyPath(filepath) {
-    var parsedPath = path.parse(filepath);
-    var copyPath = path.parse(filepath);
-    var copy = 0;
-    while (fileExists(path.format(copyPath))) {
-        ++copy;
-        copyPath.name = parsedPath.name+'('+copy+')';
-        copyPath.base = copyPath.name + copyPath.ext;
-    }
-    return path.format(copyPath);
-}
-
-function copyFile(source, target, cb) {
-    console.log('Moving file from %s to %s', source, target);
-    var cbCalled = false;
-    var rd = fs.createReadStream(source);
-    rd.on("error", function(err) { done(err); });
-
-    var wr = fs.createWriteStream(target);
-    wr.on("error", function(err) { done(err); });
-    wr.on("close", function(ex) { done(); });
-
-    rd.pipe(wr);
-
-    function done(err) {
-        if(!cbCalled) {
-            cbCalled = true;
-            if(err) {
-                console.log('Could not move file %s to %s', source, target);
-                cb(err);
+    async.series([
+        checkOptionsFile,
+        validateRequiredPaths,
+        validateOptionalPaths,
+        validateOptionalInts,
+        setPDFSearchifyListeners,
+        makeQueue,
+        ], function(err) {
+            if (err) {
+                console.log(err);
+                exit();
             } else {
-                if (fileExists(target)) {
-                    unlinkFile(source, target);
-                    cb();
-                }
+                startWatcher();
             }
         }
-    }
+    );
 }
 
-function ensureDirPath(filepath, cb) {
-    console.log('Ensuring a path to %s', filepath);
-    dirpath = path.dirname(filepath);
-    mkdirp(dirpath, function(err) {
-        if (err) {
-            console.log('Could not make a directory path for %s', dirpath);
-            cb(err);
-        }
-        cb();
-    });
-}
-
-function unlinkFile(target, newLocation) {
-    console.log('Removing %s. This file should exist at %s', target, newLocation);
-    var dirname = path.dirname(target);
-    if (!fileExists(newLocation)) {
-        console.log('%s has not been moved to %s', target, newLocation);
-        console.log('Not deleting %s', target);
+function checkOptionsFile(cb) {
+    if (!settingspath) {
+        return cb(new Error('No settings file passed'));
     } else {
-        fs.unlink(target);
-        checkDeleteDirectory(dirname);
-    }
-}
-
-function checkDeleteDirectory(dirname, basepath) {
-    var dirname = path.normalize(dirname + '/');
-    
-    if (dirname !== options.watchpath && dirname !== options.processpath) {
-        console.log('Attempting to delete directory %s', dirname);
         try {
-            fs.rmdirSync(dirname);
-            console.log('Directory %s deleted', dirname);
-            checkDeleteDirectory(path.normalize(dirname+'/..'));
+            settings = require(settingspath);
         } catch (e) {
-            console.log('Could not delete directory %s', dirname);
+            return cb(new Error('Settings file is not a valid JSON object'));
         }
+        pdfsearchify = require('./pdfsearchify')(settings.pdfsearchify || {});
+        return cb(null);
     }
 }
 
-    
-
-function startWatcher() {
-    watcher = chokidar.watch(options.watchpath, { persistent: true, usePolling: true });
-    watcher.on('add', function(filepath) { addFile(filepath); });
-    watcher.on('unlink', function(filepath) { removeFile(filepath); });
-    watcher.on('ready', function() {
-        ManagePDFSearchify();
-        started = true;
+function validateRequiredPaths(cb) {
+    async.forEach(requiredPaths, validatePath, function(err) {
+        return cb(err);
     });
 }
 
-function hrTimeString(hrtime) {
-    return hrtime[0]+hrtime[1]/1000000000;
+function validateOptionalPaths(cb) {
+    async.forEach(optionalPaths, validateOptionalPath, function(err) {
+        return cb(err);
+    });
 }
 
-function setPDFSearchifyListeners() {
+function validateOptionalInts(cb) {
+    async.forEach(optionalInts, validateOptionalInt, function(err) {
+        return cb(err);
+    });
+}
+
+
+function validatePath(pathtype, cb) {
+    if (!settings.hasOwnProperty(pathtype)) {
+        return cb(new Error('Settings file must have a ' + pathtype));
+    } else {
+        settings[pathtype] = path.normalize(settings[pathtype] + '/');
+        fs.lstat(settings[pathtype], function(err, stats) {
+            if (err) {
+               return cb(err);
+            } else if (!stats.isDirectory()) {
+                return cb(new Error(pathtype + ' must be a valid directory'));
+            } else {
+                return cb(null);
+            }
+        });
+    }
+}
+
+function validateOptionalPath(pathtype, cb) {
+    if (settings.hasOwnProperty(pathtype)) {
+        return validatePath(pathtype, cb);
+    } else {
+        return cb(null);
+    }
+}
+
+function validateOptionalInt(option, cb) {
+    if (settings.hasOwnProperty(option)) {
+        if (settings[option] === parseInt(settings[option], 10)) {
+            console.log('Setting %s to %s', option, settings[option]);
+            settings[option] = parseInt(settings[option], 10);
+            return cb(null);
+        } else {
+            console.log('%s is not a valid %s value', settings[option], option);
+            delete settings[option];
+            return cb(null);
+        }
+    } else {
+        return cb(null);
+    }
+}
+
+function setPDFSearchifyListeners(cb) {
     pdfsearchify.on('start', function(o) { console.log('Starting: '+o.infile); });
     pdfsearchify.on('compose', function(o) { console.log('Composing: '+o.outfile); });
     pdfsearchify.on('composed', function(o) { console.log('Composed: '+o.outfile+' ('+hrTimeString(o.time)+')'); });
@@ -188,55 +124,224 @@ function setPDFSearchifyListeners() {
     pdfsearchify.on('composePage', function(o) { console.log('Composing page: '+o.pagenum); });
     pdfsearchify.on('pageComposed', function(o) { console.log('Composed page: '+o.pagenum+' ('+hrTimeString(o.time)+')'); });
     pdfsearchify.on('done', function(o) { console.log('Done: '+o.infile+' ('+hrTimeString(o.time)+')'); });
+    cb(null);
 }
 
-function FinishOCR() {
-    processing = false;
-    ManagePDFSearchify();
+function hrTimeString(hrtime) {
+    return hrtime[0]+hrtime[1]/1000000000;
 }
 
-function ManagePDFSearchify() {
-    if (!processing && filelist.length > 0) {
-        processing = true;
-        var inpath = filelist[0];
-        filelist.shift();
-        var relativepath = path.normalize(inpath.replace(options.watchpath,''));
-        var procpath = getEmptyPath(path.normalize(path.join(options.processpath, relativepath)));
-        var outpath = getEmptyPath(path.normalize(path.join(options.finishpath, relativepath)));
+function makeQueue(cb) {
+    q = async.queue(managePDFSearchify, (settings.workers || 1));
+    return cb(null);
+}
 
-        ensureDirPath(procpath, function(err) {
-            if (err) return FinishOCR();
-            ensureDirPath(outpath, function(err) {
-                if (err) return FinishOCR();
-                copyFile(inpath, procpath, function(err) {
-                    if (err) return FinishOCR();
-                    if(fileExists(procpath)) {
-                        pdfsearchify(procpath, outpath, function(err) {
-                            if (err) {
-                                console.log('ERROR: '+err);
-                                var errorpath = getEmptyPath(path.join(options.errorpath, relativepath));
-                                ensureDirPath(errorpath, function(err) {
-                                    if (err) {
-                                        return FinishOCR();
-                                    }
-                                    copyFile(procpath, errorpath, function(err) {;
-                                        return FinishOCR();
-                                    });
-                                });
-                            } else {
-                                console.log('Everything is OK');
-                                unlinkFile(procpath, outpath);
-                                return FinishOCR();
-                            }
-                        });
-                    }
-                });
-            });
-        });
-        ManagePDFSearchify();
+function startWatcher() {
+    watcher = chokidar.watch(settings.watchpath, { persistent: true, usePolling: true });
+    watcher.on('add', function(filepath) { q.push(filepath) });
+}
+
+function fileExists(filepath) {
+    try {
+        fs.statSync(filepath)
+        return true;
+    } catch(e) {
+        return false;
     }
 }
 
+function managePDFSearchify(file, cb) {
+    if(fileExists(file)) {
+        var processInfo = { "infile": file };
+        async.waterfall([
+            async.apply(calcDirPaths, processInfo),
+            ensureProcDirPath,
+            ensureOutDirPath,
+            ensureKeepDirPath,
+            calcProcFileName,
+            calcOutFileName,
+            calcKeepFileName,
+            copyKeepFile,
+            copyProcFile,
+            ], function(err, processInfo) {
+                if (err) {
+                    console.log(err);
+                    return cb(err);
+                } else {
+                    return searchify(processInfo, function(err) {
+                        if (err) {
+                            console.log(err);
+                        }
+                        return cleanup(err, processInfo, cb);
+                    });
+                }
+            }
+        );
+    } else {
+        console.log('File %s no longer exists', file);
+        return cb(null);
+    }
+}
+
+function calcDirPaths(processInfo, cb) {
+    processInfo['relativepath'] = processInfo['infile'].replace(settings.watchpath,'');
+    processInfo['procpath'] = path.normalize(path.join(settings.processpath, processInfo['relativepath']));
+    processInfo['outpath'] = path.normalize(path.join(settings.finishpath, processInfo['relativepath']));
+    processInfo['errorpath'] = path.normalize(path.join(settings.errorpath, processInfo['relativepath']));
+    if (settings['keeppath']) {
+        processInfo['keeppath'] = path.normalize(path.join(settings.keeppath, processInfo['relativepath']));
+    }
+    return cb(null, processInfo);
+}
+
+function ensureProcDirPath(processInfo, cb) {
+    return ensureDirPath('procpath', processInfo, cb);
+}
+
+function ensureOutDirPath(processInfo, cb) {
+    return ensureDirPath('outpath', processInfo, cb);
+}
+
+function ensureErrorDirPath(processInfo, cb) {
+    return ensureDirPath('errorpath', processInfo, cb);
+}
+
+function ensureKeepDirPath(processInfo, cb) {
+    if (processInfo['keeppath']) {
+        return ensureDirPath('keeppath', processInfo, cb);
+    } else {
+        return cb(null, processInfo);
+    }
+}
+
+function ensureDirPath(pathkey, processInfo, cb) {
+    dirpath = path.dirname(processInfo[pathkey]);
+    mkdirp(dirpath, function(err) {
+        return cb(err, processInfo);
+    });
+}
+
+function calcProcFileName(processInfo, cb) {
+    return calcFileName('procpath', processInfo, cb);
+}
+
+function calcOutFileName(processInfo, cb) {
+    return calcFileName('outpath', processInfo, cb);
+}
+
+function calcKeepFileName(processInfo, cb) {
+    if (processInfo['keeppath']) {
+        return calcFileName('keeppath', processInfo, cb);
+    } else {
+        return cb(null, processInfo);
+    }
+}
+
+function calcErrorFileName(processInfo, cb) {
+    return calcFileName('errorpath', processInfo, cb);
+}
+
+function calcFileName(pathkey, processInfo, cb) {
+    var parsedPath = path.parse(processInfo[pathkey]);
+    var copyPath = path.parse(processInfo[pathkey]);
+    var copy = 0;
+    while (fileExists(path.format(copyPath))) {
+        ++copy;
+        copyPath.name = parsedPath.name+'('+copy+')';
+        copyPath.base = copyPath.name + copyPath.ext;
+    }
+    processInfo[pathkey] = path.format(copyPath);
+    return cb(null, processInfo);
+}
+
+function copyKeepFile(processInfo, cb) {
+    if (processInfo['keeppath']) {
+        return copyFile(processInfo, processInfo.infile, processInfo.keeppath, false, cb);
+    } else {
+        return cb(null, processInfo);
+    }
+}
+
+function copyProcFile(processInfo, cb) {
+    return copyFile(processInfo, processInfo.infile, processInfo.procpath, true, cb);
+}
+
+function copyErrorFile(processInfo, cb) {
+    return copyFile(processInfo, processInfo.procpath, processInfo.errorpath, true, cb);
+}
+
+function copyFile(processInfo, source, target, unlink, cb) {
+    var cbCalled = false;
+    var rd = fs.createReadStream(source);
+    var wr = fs.createWriteStream(target);
+    rd.on('error', function(err) { done(err); });
+    wr.on('error', function(err) { done(err); });
+    wr.on('close', function(ex) { done(); });
+    rd.pipe(wr);
+
+    function done(err) {
+        if(!cbCalled) {
+            cbCalled = true;
+            if(err) {
+                cb(err);
+            } else {
+                if (fileExists(target)) {
+                    if (unlink) {
+                        return unlinkFile(processInfo, source, target, cb);
+                    } else {
+                        return cb(null, processInfo);
+                    }
+                } else {
+                    return cb(new Error('%s not moved to %s', source, target));
+                }
+            }
+        }
+    }
+}
+
+function unlinkFile(processInfo, target, newLocation, cb) {
+    var dirname = path.dirname(target);
+    if (!fileExists(newLocation)) {
+        return cb(new Error(target+' has not been moved to '+newLocation));
+    } else {
+        fs.unlinkSync(target);
+        return checkDeleteDirectory(processInfo, dirname, cb);
+    }
+}
+
+function checkDeleteDirectory(processInfo, dirname, cb) {
+    var dirname = path.normalize(dirname + '/');
+    var failed = false;
+    
+    while (!failed && [settings.watchpath, settings.processpath, settings.errorpath].indexOf(dirname) === -1) {
+        try {
+            fs.rmdirSync(dirname);
+            dirname = path.normalize(dirname+'/../');
+        } catch (e) {
+            failed = true;
+        }
+    }
+    return cb(null, processInfo);
+}
+
+function searchify(processInfo, cb) {
+    return pdfsearchify(processInfo.procpath, processInfo.outpath, cb);
+}
+
+function cleanup(err, processInfo, cb) {
+    if (err) {
+        async.waterfall([
+            async.apply(ensureErrorDirPath, processInfo),
+            calcErrorFileName,
+            copyErrorFile,
+            ], function(err) {
+                return cb(err);
+            }
+        );
+    } else {
+        unlinkFile(processInfo, processInfo.procpath, processInfo.outpath, cb);
+    }
+}
 
 function exit() {
     running = false;
@@ -244,7 +349,4 @@ function exit() {
     process.exit(1);
 }
 
-
 start();
-
-
