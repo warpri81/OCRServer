@@ -29,8 +29,9 @@ pdfsearchify.on('pageComposed', function(o) { console.log('Composed page: '+o.pa
 pdfsearchify(infile, outfile, function(err) {
     if (err) {
         console.log('ERROR: '+err);
+        process.exit(1);
     } else {
         console.log('Everything is OK');
+        process.exit(0);
     }
-    process.exit(0);
 });
