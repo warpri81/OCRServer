@@ -12,6 +12,7 @@ function createPDFSearchify(options) {
     options = options || {};
     var upsample = options.upsample || 300;
     var optimize = options.optimize || 'default'; // screen, ebook, prepress, default
+    var preprocess = options.preprocess || 'lat'; // quick, lat
     var keepfiles = options.keepfiles || false;
 
     var tmp = require('tmp');
@@ -96,7 +97,17 @@ function createPDFSearchify(options) {
         searchify.emit('preprocessPage', { infile: infile, pagenum: pagenum, });
         var preprocessPageTime = process.hrtime();
         var outfile = path.join(outdir, 'preprocessed-'+pagenum+'.pnm');
-        exec('convert "'+pageimage+'" -type grayscale -blur 1x65000 -contrast -normalize -despeckle -despeckle -threshold 50% "'+outfile+'"', function(err, stdout, stderr) {
+        var convertOptions;
+        switch (preprocess) {
+            case 'quick':
+                convertOptions = '-type grayscale -blur 1x65000 -contrast -normalize -despeckle -despeckle -threshold 50%';
+                break;
+            case 'lat':
+            default:
+                convertOptions = '-respect-parenthesis \\( -clone 0 -colorspace gray -negate -lat 15x15+5% -contrast-stretch 0 \\) -compose copy_opacity -composite -opaque none +matte -modulate 100,100 -blur 1x1 -adaptive-sharpen 0x2 -negate -define morphology:compose=darken -morphology Thinning Rectangle:1x30+0+0 -negate'
+                break;
+        }
+        exec('convert "'+pageimage+'" '+convertOptions+' "'+outfile+'"', function(err, stdout, stderr) {
             if (err) {
                 return cb(err);
             } else {
