@@ -1,6 +1,9 @@
 import sys, os
+import re
 from fuzzywuzzy import fuzz
 from PyPDF2 import PdfFileReader
+
+SPACE_RE = re.compile(r'\s+')
 
 def comparePDFs(infile1, infile2):
     pagescores = []
@@ -11,11 +14,15 @@ def comparePDFs(infile1, infile2):
         pdf2 = PdfFileReader(fp2)
         assert(pdf1.getNumPages() == pdf2.getNumPages())
         for pagenum in range(pdf1.getNumPages()):
+            #text1 = SPACE_RE.sub(' ', pdf1.getPage(pagenum).extractText().strip())
             text1 = pdf1.getPage(pagenum).extractText()
+            #text2 = SPACE_RE.sub(' ', pdf2.getPage(pagenum).extractText().strip())
             text2 = pdf2.getPage(pagenum).extractText()
             pagescores.append([
                 fuzz.ratio(text1, text2),
-                fuzz.token_sort_ratio(text1, text2)
+                fuzz.token_sort_ratio(text1, text2),
+                len(text1),
+                len(text2),
             ])
             alltext1 += text1
             alltext2 += text2
@@ -31,10 +38,10 @@ def showComparePDFs(infile1, infile2):
     print title
     print '-'*len(title)
     page = 1
-    print 'Page  Ratio Token'
-    print '===== ===== ====='
-    for ratio_score, token_score in pagescores:
-        print '%5d %5d %5d' % (page, ratio_score, token_score)
+    print 'Page  Ratio Token Len1  Len2 '
+    print '===== ===== ===== ===== ====='
+    for ratio_score, token_score, len1, len2 in pagescores:
+        print '%5d %5d %5d %5d %5d' % (page, ratio_score, token_score, len1, len2)
         ratio_scores.append(ratio_score)
         token_scores.append(token_score)
         page += 1
