@@ -244,5 +244,4 @@ function createPDFSearchify(options) {
             });
         });
     }
-
 }
