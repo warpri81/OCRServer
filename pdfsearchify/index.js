@@ -275,7 +275,19 @@ function createPDFSearchify(options) {
                             }
                             searchify.emit('done', { infile: infile, outfile: outfile, time: process.hrtime(startTime), });
                             return unlinkFilesCallback(pdfpages, function(err) {
-                                return cb(err);
+                                if (err) {
+                                    return cb(err);
+                                } else if (keepfiles) {
+                                    return cb();
+                                } else {
+                                    fs.rmdir(tmpdir, function(err) {
+                                        if (!err || err.code === 'ENOTEMPTY') {
+                                            return cb();
+                                        } else {
+                                            return cb(err);
+                                        }
+                                    });
+                                }
                             });
                         });
                     });
