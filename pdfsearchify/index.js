@@ -198,25 +198,20 @@ function createPDFSearchify(options) {
         var tempoutfile = path.join(outdir, 'composed.pdf');
         searchify.emit('compose', { outfile: outfile, });
         var infileargs = infiles.map(function(infile) { return '"'+infile+'"'; }).join(' ');
-        exec(
-            'gs -dNOPAUSE -dSAFER -sDEVICE=pdfwrite '+
-            '-dCompatibilityLevel=1.4 -dPDFSETTINGS=/'+optimize+' '+
-            '-dBatch -o "'+tempoutfile+'" '+infileargs,
-            function(err, stdout, stderr) {
+        exec('pdftk '+infileargs+' output '+tempoutfile, function(err, stdout, stderr) {
+            if (err) {
+                return cb(err);
+            }
+            updatePDFInfo(tempoutfile, pdfinfofile, outfile, function(err) {
                 if (err) {
                     return cb(err);
                 }
-                updatePDFInfo(tempoutfile, pdfinfofile, outfile, function(err) {
-                    if (err) {
-                        return cb(err);
-                    }
-                    searchify.emit('composed', { outfile: outfile, time: process.hrtime(composeTime), });
-                    return unlinkFilesCallback([tempoutfile, pdfinfofile], function(err) {
-                        return cb(null, outfile);
-                    });
+                searchify.emit('composed', { outfile: outfile, time: process.hrtime(composeTime), });
+                return unlinkFilesCallback([tempoutfile, pdfinfofile], function(err) {
+                    return cb(null, outfile);
                 });
-            }
-        );
+            });
+        });
     }
 
     function searchifyPage(infile, tmpdir, pagenum, cb) {
