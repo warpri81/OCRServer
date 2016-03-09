@@ -40,8 +40,8 @@ function startOCRManager(settingspath) {
     }
 
     function setupLogger(cb) {
-        var loglevel = settings.hasOwnProperty('loglevel') && settings['loglevel'] === 'verbose' ? 'verbose' : 'warn';
-        if (settings.hasOwnProperty('filelog') && settings['filelog'] === true) {
+        var loglevel = settings.hasOwnProperty('loglevel') && settings.loglevel === 'verbose' ? 'verbose' : 'warn';
+        if (settings.hasOwnProperty('filelog') && settings.filelog === true) {
             winston.add(winston.transports.File, {
                 filename: './logs/ocrlog'+process.hrtime().join('')+'.txt',
             });
@@ -205,12 +205,12 @@ function startOCRManager(settingspath) {
     }
 
     function calcDirPaths(processInfo, cb) {
-        processInfo['relativepath'] = processInfo['infile'].replace(settings.watchpath,'');
-        processInfo['procpath'] = path.normalize(path.join(settings.processpath, processInfo['relativepath']));
-        processInfo['outpath'] = path.normalize(path.join(settings.finishpath, processInfo['relativepath']));
-        processInfo['errorpath'] = path.normalize(path.join(settings.errorpath, processInfo['relativepath']));
-        if (settings['keeppath']) {
-            processInfo['keeppath'] = path.normalize(path.join(settings.keeppath, processInfo['relativepath']));
+        processInfo.relativepath = processInfo.infile.replace(settings.watchpath,'');
+        processInfo.procpath = path.normalize(path.join(settings.processpath, processInfo.relativepath));
+        processInfo.outpath = path.normalize(path.join(settings.finishpath, processInfo.relativepath));
+        processInfo.errorpath = path.normalize(path.join(settings.errorpath, processInfo.relativepath));
+        if (settings.keeppath) {
+            processInfo.keeppath = path.normalize(path.join(settings.keeppath, processInfo.relativepath));
         }
         return cb(null, processInfo);
     }
@@ -228,7 +228,7 @@ function startOCRManager(settingspath) {
     }
 
     function ensureKeepDirPath(processInfo, cb) {
-        if (processInfo['keeppath']) {
+        if (processInfo.keeppath) {
             return ensureDirPath('keeppath', processInfo, cb);
         } else {
             return cb(null, processInfo);
@@ -251,7 +251,7 @@ function startOCRManager(settingspath) {
     }
 
     function calcKeepFileName(processInfo, cb) {
-        if (processInfo['keeppath']) {
+        if (processInfo.keeppath) {
             return calcFileName('keeppath', processInfo, cb);
         } else {
             return cb(null, processInfo);
@@ -276,7 +276,7 @@ function startOCRManager(settingspath) {
     }
 
     function copyKeepFile(processInfo, cb) {
-        if (processInfo['keeppath']) {
+        if (processInfo.keeppath) {
             return copyFile(processInfo, processInfo.infile, processInfo.keeppath, false, cb);
         } else {
             return cb(null, processInfo);
