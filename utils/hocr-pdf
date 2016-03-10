@@ -33,9 +33,10 @@ from reportlab.pdfbase.ttfonts import TTFont
 from xml.etree.ElementTree import ElementTree, ParseError
 from PyPDF2 import PdfFileReader, PdfFileWriter
 
-def export_pdf(bgtype, image, hocrfile, pdffile, default_dpi):
+def export_pdf(bgtype, image, hocrfile, pdffile, default_dpi, hocr_dpi):
   """Create a searchable PDF from a pile of HOCR + JPEG"""
 
+  if hocr_dpi == None: hocr_dpi = default_dpi
   if bgtype == 'JPEG':
       #load_invisible_font()
       pdf = Canvas(pdffile, pageCompression=1)
@@ -50,7 +51,7 @@ def export_pdf(bgtype, image, hocrfile, pdffile, default_dpi):
       height = h * 72 / dpi
       pdf.setPageSize((width, height))
       pdf.drawImage(image, 0, 0, width=width, height=height)
-      add_text_layer(pdf, image, hocrfile, height, dpi)
+      add_text_layer(pdf, image, hocrfile, height, hocr_dpi)
       pdf.showPage()
       pdf.save()
 
@@ -63,7 +64,7 @@ def export_pdf(bgtype, image, hocrfile, pdffile, default_dpi):
       width = orig_mediabox[2]
       height = orig_mediabox[3]
       can.setPageSize((width, height))
-      add_text_layer(can, image, hocrfile, height, dpi)
+      add_text_layer(can, image, hocrfile, height, hocr_dpi)
       can.showPage()
       can.save()
 
@@ -160,6 +161,6 @@ CMGjwvxTsr74/f/F95m3TH9x8o0/TU//N+7/D/ScVcA=
 
 if __name__ == "__main__":
   if len(sys.argv) == 1:
-    print("Usage: %s <source image> <background type> <hocr file> <output pdf> [dpi]\n" % os.path.basename(sys.argv[0]))
+    print("Usage: %s <source image> <background type> <hocr file> <output pdf> [dpi] [hocrdpi]\n" % os.path.basename(sys.argv[0]))
   else:
-    export_pdf(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], int(sys.argv[5]) if len(sys.argv) > 5 else 300)
+    export_pdf(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], int(sys.argv[5]) if len(sys.argv) > 5 else 300, int(sys.argv[6]) if len(sys.argv) > 6 else None)

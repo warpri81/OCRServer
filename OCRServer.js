@@ -22,6 +22,8 @@ pdfsearchify.on('deskewPNM', function(o) { console.log('Deskewing page: '+o.proc
 pdfsearchify.on('PNMDeskewed', function(o) { console.log('Deskewed page: '+o.processInfo.pagenum+' ('+hrTimeString(o.time)+')'); });
 pdfsearchify.on('preprocessPage', function(o) { console.log('Preprocessing page: '+o.processInfo.pagenum); });
 pdfsearchify.on('pagePreprocessed', function(o) { console.log('Preprocessed page: '+o.processInfo.pagenum+' ('+hrTimeString(o.time)+')'); });
+pdfsearchify.on('downsamplePage', function(o) { console.log('Downsampling page: '+o.processInfo.pagenum); });
+pdfsearchify.on('pageDownsampled', function(o) { console.log('Downsampled page: '+o.processInfo.pagenum+' ('+hrTimeString(o.time)+')'); });
 pdfsearchify.on('ocrPage', function(o) { console.log('Ocring page: '+o.processInfo.pagenum); });
 pdfsearchify.on('pageOcred', function(o) { console.log('Ocred page: '+o.processInfo.pagenum+' ('+hrTimeString(o.time)+')'); });
 pdfsearchify.on('composePage', function(o) { console.log('Composing page: '+o.processInfo.pagenum); });

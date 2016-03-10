@@ -11,6 +11,7 @@ function createPDFSearchify(options) {
 
     options = options || {};
     var upsample = options.upsample || 300;
+    var downsample = options.downsample;
     var optimize = options.optimize || 'default'; // screen, ebook, prepress, default
     var preprocess = options.preprocess || 'lat'; // quick, lat
     var keepfiles = options.keepfiles || false;
@@ -146,18 +147,36 @@ function createPDFSearchify(options) {
             }
         });
     }
+
+    function downsamplePage(processInfo, cb) {
+        if (downsample === undefined || downsample === upsample) {
+            return cb(null, processInfo);
+        }
+        searchify.emit('downsamplePage', { processInfo: processInfo });
+        var downsamplePageTime = process.hrtime();
+        processInfo.files.downsamplePNM = path.join(processInfo.outdir, 'downsample-'+processInfo.pagenum+'.pnm');
+        exec('convert -density '+upsample+' "'+processInfo.files.deskewPNM+'" -resample '+downsample+' "'+processInfo.files.downsamplePNM+'"', function(err, stdout, stderr) {
+            if (err) {
+                return cb(err);
+            } else {
+                searchify.emit('pageDownsampled', { processInfo: processInfo, time: process.hrtime(downsamplePageTime), });
+                return cb(null, processInfo);
+            }
+        });
+    }
     
     function composePage(processInfo, cb) {
         searchify.emit('composePage', { processInfo: processInfo });
         var composePageTime = process.hrtime();
         var outfile = path.join(processInfo.outdir, 'pdf-'+processInfo.pagenum+'.pdf');
+        var pageImagePNM = processInfo.files.downsamplePNM || processInfo.files.deskewPNM;
         if (processInfo.colorcode === "0") {
             processInfo.files.jbig2 = path.join(processInfo.outdir, 'jbig2-'+processInfo.pagenum+'.pdf');
-            exec('jbig2 -s -p -v "'+processInfo.files.deskewPNM+'" && ./utils/pdf.py output > "'+processInfo.files.jbig2+'"', function(err, stdout, stderr) {
+            exec('jbig2 -s -p -v "'+pageImagePNM+'" && ./utils/pdf.py output '+(downsample || upsample)+' > "'+processInfo.files.jbig2+'"', function(err, stdout, stderr) {
                 if (err) {
                     return cb(err);
                 } else {
-                    exec('python utils/hocr-pdf PDF "'+processInfo.files.jbig2+'" "'+processInfo.files.hocr+'" "'+outfile+'" '+upsample, function(err, stdout, stderr) {
+                    exec('python utils/hocr-pdf PDF "'+processInfo.files.jbig2+'" "'+processInfo.files.hocr+'" "'+outfile+'" '+(downsample || upsample)+' '+upsample, function(err, stdout, stderr) {
                         if (err) {
                             return cb(err);
                         } else {
@@ -172,11 +191,11 @@ function createPDFSearchify(options) {
         } else {
             processInfo.files.jpeg = path.join(processInfo.outdir, 'jpeg-'+processInfo.pagenum+'.jpg');
             var grayscale = (processInfo.colorcode === "1" ? ' -grayscale ' : '');
-            exec('pnmtojpeg --optimize '+grayscale+'"'+processInfo.files.deskewPNM+'" > "'+processInfo.files.jpeg+'"', function(err, stdout, stderr) {
+            exec('pnmtojpeg --optimize '+grayscale+'"'+pageImagePNM+'" > "'+processInfo.files.jpeg+'"', function(err, stdout, stderr) {
                 if (err) {
                     return cb(err);
                 } else {
-                    exec('python utils/hocr-pdf JPEG "'+processInfo.files.jpeg+'" "'+processInfo.files.hocr+'" "'+outfile+'" '+upsample, function(err, stdout, stderr) {
+                    exec('python utils/hocr-pdf JPEG "'+processInfo.files.jpeg+'" "'+processInfo.files.hocr+'" "'+outfile+'" '+(downsample || upsample)+' '+upsample, function(err, stdout, stderr) {
                         if (err) {
                             return cb(err);
                         } else {
@@ -221,6 +240,7 @@ function createPDFSearchify(options) {
             deskewPNM,
             preprocessPage,
             ocrPage,
+            downsamplePage,
             composePage,
         ], function(err, outfile) {
             if (err) {
