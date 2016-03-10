@@ -12,8 +12,7 @@ function createPDFSearchify(options) {
     options = options || {};
     var upsample = options.upsample || 300;
     var downsample = options.downsample;
-    var optimize = options.optimize || 'default'; // screen, ebook, prepress, default
-    var preprocess = options.preprocess || 'lat'; // quick, lat
+    var preprocess = options.preprocess || 'quick'; // quick, lat
     var keepfiles = options.keepfiles || false;
 
     var tmp = require('tmp');
