@@ -10,6 +10,7 @@ module.exports = createPDFSearchify;
 function createPDFSearchify(options) {
 
     options = options || {};
+    var cores = options.cores || 0;
     var upsample = options.upsample || 300;
     var downsample = options.downsample;
     var preprocess = options.preprocess || 'quick'; // quick, lat
@@ -94,8 +95,9 @@ function createPDFSearchify(options) {
     function deskewPNM(processInfo, cb) {
         searchify.emit('deskewPNM', { processInfo: processInfo });
         var deskewPageTime = process.hrtime();
+        var convertCommand = 'convert' + ((cores) ? ' -limit thread 1' : '');
         processInfo.files.deskewPNM = path.join(processInfo.outdir, 'deskew-'+processInfo.pagenum+'.pnm');
-        exec('convert "'+processInfo.files.originPNM+'" -deskew 40% "'+processInfo.files.deskewPNM+'"', function(err, stdout, stderr) {
+        exec(convertCommand + ' "'+processInfo.files.originPNM+'" -deskew 40% "'+processInfo.files.deskewPNM+'"', function(err, stdout, stderr) {
             if (err) {
                 return cb(err);
             } else {
@@ -109,6 +111,7 @@ function createPDFSearchify(options) {
         searchify.emit('preprocessPage', { processInfo: processInfo });
         var preprocessPageTime = process.hrtime();
         processInfo.files.preprocPNM = path.join(processInfo.outdir, 'preprocessed-'+processInfo.pagenum+'.pnm');
+        var convertCommand = 'convert' + ((cores) ? ' -limit thread 1' : '');
         var convertOptions;
         switch (preprocess) {
             case 'quick':
@@ -119,7 +122,7 @@ function createPDFSearchify(options) {
                 convertOptions = '-respect-parenthesis \\( -clone 0 -colorspace gray -negate -lat 15x15+5% -contrast-stretch 0 \\) -compose copy_opacity -composite -opaque none +matte -modulate 100,100 -blur 1x1 -adaptive-sharpen 0x2 -negate -define morphology:compose=darken -morphology Thinning Rectangle:1x30+0+0 -negate';
                 break;
         }
-        exec('convert "'+processInfo.files.deskewPNM+'" '+convertOptions+' "'+processInfo.files.preprocPNM+'"', function(err, stdout, stderr) {
+        exec(convertCommand + ' "'+processInfo.files.deskewPNM+'" '+convertOptions+' "'+processInfo.files.preprocPNM+'"', function(err, stdout, stderr) {
             if (err) {
                 return cb(err);
             } else {
@@ -154,7 +157,8 @@ function createPDFSearchify(options) {
         searchify.emit('downsamplePage', { processInfo: processInfo });
         var downsamplePageTime = process.hrtime();
         processInfo.files.downsamplePNM = path.join(processInfo.outdir, 'downsample-'+processInfo.pagenum+'.pnm');
-        exec('convert -density '+upsample+' "'+processInfo.files.deskewPNM+'" -resample '+downsample+' "'+processInfo.files.downsamplePNM+'"', function(err, stdout, stderr) {
+        var convertCommand = 'convert' + ((cores) ? ' -limit thread 1' : '');
+        exec(convertCommant + ' -density '+upsample+' "'+processInfo.files.deskewPNM+'" -resample '+downsample+' "'+processInfo.files.downsamplePNM+'"', function(err, stdout, stderr) {
             if (err) {
                 return cb(err);
             } else {
@@ -278,13 +282,13 @@ function createPDFSearchify(options) {
                                     if (err) {
                                         return cb(err);
                                     }
-                                    pdfpages.push(outfile);
+                                    pdfpages[processInfo.pagenum-1] = outfile;
                                     return cb();
                                 });
                             });
                         })();
                     }
-                    async.series(tasks, function(err) {
+                    async.parallelLimit(tasks, cores || 1, function(err) {
                         if (err) {
                             return cb(err);
                         }
