@@ -158,7 +158,7 @@ function createPDFSearchify(options) {
         var downsamplePageTime = process.hrtime();
         processInfo.files.downsamplePNM = path.join(processInfo.outdir, 'downsample-'+processInfo.pagenum+'.pnm');
         var convertCommand = 'convert' + ((cores) ? ' -limit thread 1' : '');
-        exec(convertCommant + ' -density '+upsample+' "'+processInfo.files.deskewPNM+'" -resample '+downsample+' "'+processInfo.files.downsamplePNM+'"', function(err, stdout, stderr) {
+        exec(convertCommand + ' -density '+upsample+' "'+processInfo.files.deskewPNM+'" -resample '+downsample+' "'+processInfo.files.downsamplePNM+'"', function(err, stdout, stderr) {
             if (err) {
                 return cb(err);
             } else {
