@@ -9,7 +9,10 @@ function hrTimeString(hrtime) {
 }
 
 pdfsearchify.on('start', function(o) { console.log('Starting: '+o.infile); });
-pdfsearchify.on('done', function(o) { console.log('Done: '+o.infile+' ('+hrTimeString(o.time)+')'); });
+pdfsearchify.on('done', function(o) {
+    var pagesPerSecond = o.pages / (o.time[0] + o.time[1]/1e9);
+    console.log('Done: '+o.infile+' ('+o.pages+' pages in '+hrTimeString(o.time)+'s - '+pagesPerSecond+' pages/sec)');
+});
 pdfsearchify.on('compose', function(o) { console.log('Composing: '+o.outfile); });
 pdfsearchify.on('composed', function(o) { console.log('Composed: '+o.outfile+' ('+hrTimeString(o.time)+')'); });
 pdfsearchify.on('startPage', function(o) { console.log('Starting page: '+o.processInfo.pagenum); });

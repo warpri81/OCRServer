@@ -292,7 +292,8 @@ function createPDFSearchify(options) {
                             if (err) {
                                 return cb(err);
                             }
-                            searchify.emit('done', { infile: infile, outfile: outfile, time: process.hrtime(startTime), });
+                            var timeElapsed = process.hrtime(startTime);
+                            searchify.emit('done', { infile: infile, outfile: outfile, time: timeElapsed, pages: pagecount, });
                             return unlinkFilesCallback(pdfpages, function(err) {
                                 if (err) {
                                     return cb(err);

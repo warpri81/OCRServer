@@ -142,7 +142,10 @@ function startOCRManager(settingspath) {
         pdfsearchify.on('pageOcred', function(o) { winston.info('Ocred page: '+o.processInfo.pagenum+' ('+hrTimeString(o.time)+')'); });
         pdfsearchify.on('composePage', function(o) { winston.info('Composing page: '+o.processInfo.pagenum); });
         pdfsearchify.on('pageComposed', function(o) { winston.info('Composed page: '+o.processInfo.pagenum+' ('+hrTimeString(o.time)+')'); });
-        pdfsearchify.on('done', function(o) { winston.info('Done: '+o.infile+' ('+hrTimeString(o.time)+')'); });
+        pdfsearchify.on('done', function(o) {
+            var pagesPerSecond = o.pages / (o.time[0] + o.time[1]/1e9);
+            winston.info('Done: '+o.infile+' ('+o.pages+' pages in '+hrTimeString(o.time)+'s - '+pagesPerSecond+' pages/sec)');
+        });
         cb(null);
     }
 
