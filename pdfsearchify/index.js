@@ -15,6 +15,7 @@ function createPDFSearchify(options) {
     var downsample = options.downsample;
     var preprocess = options.preprocess || 'quick'; // quick, lat
     var keepfiles = options.keepfiles || false;
+    var allowjbig2 = options.jbig2 || false;
 
     var tmp = require('tmp');
     if (!keepfiles) {
@@ -173,7 +174,7 @@ function createPDFSearchify(options) {
         var composePageTime = process.hrtime();
         var outfile = path.join(processInfo.outdir, 'pdf-'+processInfo.pagenum+'.pdf');
         var pageImagePNM = processInfo.files.downsamplePNM || processInfo.files.deskewPNM;
-        if (processInfo.colorcode === "0") {
+        if (allowjbig2 && processInfo.colorcode === "0") {
             processInfo.files.jbig2 = path.join(processInfo.outdir, 'jbig2-'+processInfo.pagenum+'.pdf');
             exec('jbig2 -s -p -v "'+pageImagePNM+'" && ./utils/pdf.py output '+(downsample || upsample)+' > "'+processInfo.files.jbig2+'"', function(err, stdout, stderr) {
                 if (err) {
@@ -193,7 +194,7 @@ function createPDFSearchify(options) {
             });
         } else {
             processInfo.files.jpeg = path.join(processInfo.outdir, 'jpeg-'+processInfo.pagenum+'.jpg');
-            var grayscale = (processInfo.colorcode === "1" ? ' -grayscale ' : '');
+            var grayscale = ((processInfo.colorcode === "1" || processInfo.colorcode === "0") ? ' -grayscale ' : '');
             exec('pnmtojpeg --optimize '+grayscale+'"'+pageImagePNM+'" > "'+processInfo.files.jpeg+'"', function(err, stdout, stderr) {
                 if (err) {
                     return cb(err);
