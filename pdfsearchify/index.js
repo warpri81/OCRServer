@@ -158,7 +158,7 @@ function createPDFSearchify(options) {
         var downsamplePageTime = process.hrtime();
         processInfo.files.downsamplePNM = path.join(processInfo.outdir, 'downsample-'+processInfo.pagenum+'.pnm');
         var convertCommand = 'convert' + ((cores) ? ' -limit thread 1' : '');
-        exec(convertCommant + ' -density '+upsample+' "'+processInfo.files.deskewPNM+'" -resample '+downsample+' "'+processInfo.files.downsamplePNM+'"', function(err, stdout, stderr) {
+        exec(convertCommand + ' -density '+upsample+' "'+processInfo.files.deskewPNM+'" -resample '+downsample+' "'+processInfo.files.downsamplePNM+'"', function(err, stdout, stderr) {
             if (err) {
                 return cb(err);
             } else {
@@ -175,22 +175,29 @@ function createPDFSearchify(options) {
         var pageImagePNM = processInfo.files.downsamplePNM || processInfo.files.deskewPNM;
         if (processInfo.colorcode === "0") {
             processInfo.files.jbig2 = path.join(processInfo.outdir, 'jbig2-'+processInfo.pagenum+'.pdf');
-            exec('jbig2 -s -p -v "'+pageImagePNM+'" && ./utils/pdf.py output '+(downsample || upsample)+' > "'+processInfo.files.jbig2+'"', function(err, stdout, stderr) {
-                if (err) {
-                    return cb(err);
-                } else {
-                    exec('python utils/hocr-pdf PDF "'+processInfo.files.jbig2+'" "'+processInfo.files.hocr+'" "'+outfile+'" '+(downsample || upsample)+' '+upsample, function(err, stdout, stderr) {
+            var symboltable = 'jbig2-'+processInfo.pagenum;
+            exec('jbig2 -s -p -v -b '+symboltable+' "'+pageImagePNM+'"', function(err, stdout, stderr) {
+               if (err) {
+                  return cb(err);
+               } else {
+                   exec('./utils/pdf.py '+symboltable+' '+(downsample || upsample)+' > "'+processInfo.files.jbig2+'"', function(err, stdout, stderr) {
                         if (err) {
                             return cb(err);
                         } else {
-                            searchify.emit('pageComposed', { processInfo: processInfo, time: process.hrtime(composePageTime), });
-                            return unlinkFilesCallback(processInfo['files'], function(err) {
-                                return cb(err, outfile);
+                            exec('python utils/hocr-pdf PDF "'+processInfo.files.jbig2+'" "'+processInfo.files.hocr+'" "'+outfile+'" '+(downsample || upsample)+' '+upsample, function(err, stdout, stderr) {
+                                if (err) {
+                                    return cb(err);
+                                } else {
+                                    searchify.emit('pageComposed', { processInfo: processInfo, time: process.hrtime(composePageTime), });
+                                    return unlinkFilesCallback(processInfo['files'], function(err) {
+                                        return cb(err, outfile);
+                                    });
+                                }
                             });
                         }
-                    });
-                }
-            });
+                   });
+               }
+            }); 
         } else {
             processInfo.files.jpeg = path.join(processInfo.outdir, 'jpeg-'+processInfo.pagenum+'.jpg');
             var grayscale = (processInfo.colorcode === "1" ? ' -grayscale ' : '');
@@ -202,8 +209,7 @@ function createPDFSearchify(options) {
                         if (err) {
                             return cb(err);
                         } else {
-                            searchify.emit('pageComposed', { processInfo: processInfo, time: process.hrtime(composePageTime), });
-                            return unlinkFilesCallback(processInfo.files, function(err) {
+                            searchify.emit('pageComposed', { processInfo: processInfo, time: process.hrtime(composePageTime), }); return unlinkFilesCallback(processInfo.files, function(err) {
                                 return cb(err, outfile);
                             });
                         }
