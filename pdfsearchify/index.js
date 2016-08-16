@@ -71,6 +71,8 @@ function createPDFSearchify(options) {
             function(err, stdout, stderr) {
                 if (err) {
                     return cb(err);
+                } else if (stderr.match(/failed to decode image/)) {
+                    return cb('could not extract page '+processInfo.pagenum);
                 } else {
                     searchify.emit('PNMExtracted', { processInfo: processInfo, time: process.hrtime(extractPageTime), });
                     return cb(null, processInfo);
