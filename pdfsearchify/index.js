@@ -16,6 +16,7 @@ function createPDFSearchify(options) {
     var preprocess = options.preprocess || 'quick'; // quick, lat
     var keepfiles = options.keepfiles || false;
     var allowjbig2 = options.jbig2 || false;
+    var composebatchsize = options.composebatchsize || 500;
 
     var tmp = require('tmp');
     if (!keepfiles) {
@@ -224,23 +225,38 @@ function createPDFSearchify(options) {
 
     function composePDF(infiles, pdfinfofile, outdir, outfile, cb) {
         var composeTime = process.hrtime();
-        var tempoutfile = path.join(outdir, 'composed.pdf');
         searchify.emit('compose', { outfile: outfile, });
-        var infileargs = infiles.map(function(infile) { return '"'+infile+'"'; }).join(' ');
-        exec('pdftk '+infileargs+' output '+tempoutfile, function(err, stdout, stderr) {
-            if (err) {
-                return cb(err);
-            }
-            updatePDFInfo(tempoutfile, pdfinfofile, outfile, function(err) {
+        var pagefiles = infiles.slice();
+        var batches = [];
+        async.whilst(
+            function() { return pagefiles.length; },
+            function(cb) {
+                var tempoutfile = path.join(outdir, 'composing-'+batches.length+'.pdf');
+                var pagefileset = pagefiles.splice(0, composebatchsize);
+                if (batches.length) {
+                    pagefileset.unshift(batches[0]);
+                }
+                var args = pagefileset.map(function(f) { return '"'+f+'"'; }).join(' ');
+                exec('pdftk '+args+' output '+tempoutfile, function(err, stdout, stderr) {
+                    batches.unshift(tempoutfile);
+                    return cb(err);
+                });
+            },
+            function(err, n) {
                 if (err) {
                     return cb(err);
                 }
-                searchify.emit('composed', { outfile: outfile, time: process.hrtime(composeTime), });
-                return unlinkFilesCallback([tempoutfile, pdfinfofile], function(err) {
-                    return cb(null, outfile);
+                updatePDFInfo(batches[0], pdfinfofile, outfile, function(err) {
+                    if (err) {
+                        return cb(err);
+                    }
+                    searchify.emit('composed', { outfile: outfile, time: process.hrtime(composeTime), });
+                    return unlinkFilesCallback([pdfinfofile].concat(batches), function(err) {
+                        return cb(null, outfile);
+                    });
                 });
-            });
-        });
+            }
+        );
     }
 
     function searchifyPage(processInfo, cb) {
