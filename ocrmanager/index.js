@@ -159,7 +159,15 @@ function startOCRManager(settingspath) {
     }
 
     function startWatcher() {
-        watcher = chokidar.watch(settings.watchpath, { persistent: true, usePolling: true });
+        chokidar_options = {
+            persistent: true,
+            usePolling: true,
+            awaitWriteFinish: {
+                stabilityThreshold: 10000,
+                pollInterval: 100
+            }
+        }
+        watcher = chokidar.watch(settings.watchpath, chokidar_options);
         watcher.on('add', function(filepath) { q.push(filepath) });
     }
 
