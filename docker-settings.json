@@ -1,0 +1,13 @@
+{
+  "watchpath": "/ocr/watch",
+  "processpath": "/ocr/process",
+  "finishpath": "/ocr/finished",
+  "errorpath": "/ocr/failed",
+  "filelog": true,
+  "pdfsearchify": {
+      "cores": 8,
+      "upsample": 300,
+      "downsample": 150,
+      "jbig2": true
+   }
+}
