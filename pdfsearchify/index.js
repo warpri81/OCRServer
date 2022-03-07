@@ -85,7 +85,7 @@ function createPDFSearchify(options) {
     function detectColor(processInfo, cb) {
         searchify.emit('detectColor', { processInfo: processInfo});
         var detectColorTime = process.hrtime();
-        exec('python ./utils/detectColor.py '+processInfo.files.originPNM, function(err, stdout, stderr) {
+        exec('python2 ./utils/detectColor.py '+processInfo.files.originPNM, function(err, stdout, stderr) {
             if (err) {
                 return cb(err);
             } else {
@@ -188,7 +188,7 @@ function createPDFSearchify(options) {
                         if (err) {
                             return cb(err);
                         } else {
-                            exec('python utils/hocr-pdf PDF "'+processInfo.files.jbig2+'" "'+processInfo.files.hocr+'" "'+outfile+'" '+(downsample || upsample)+' '+upsample, function(err, stdout, stderr) {
+                            exec('python2 utils/hocr-pdf PDF "'+processInfo.files.jbig2+'" "'+processInfo.files.hocr+'" "'+outfile+'" '+(downsample || upsample)+' '+upsample, function(err, stdout, stderr) {
                                 if (err) {
                                     return cb(err);
                                 } else {
@@ -209,7 +209,7 @@ function createPDFSearchify(options) {
                 if (err) {
                     return cb(err);
                 } else {
-                    exec('python utils/hocr-pdf JPEG "'+processInfo.files.jpeg+'" "'+processInfo.files.hocr+'" "'+outfile+'" '+(downsample || upsample)+' '+upsample, function(err, stdout, stderr) {
+                    exec('python2 utils/hocr-pdf JPEG "'+processInfo.files.jpeg+'" "'+processInfo.files.hocr+'" "'+outfile+'" '+(downsample || upsample)+' '+upsample, function(err, stdout, stderr) {
                         if (err) {
                             return cb(err);
                         } else {
