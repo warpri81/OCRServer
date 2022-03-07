@@ -144,7 +144,7 @@ function createPDFSearchify(options) {
             path.dirname(processInfo.files.hocr),
             path.basename(processInfo.files.hocr, '.hocr')
         );
-        exec('tesseract "'+processInfo.files.preprocPNM+'" "'+outfilebase+'" hocr', function(err, stdout, stderr) {
+        exec('tesseract "'+processInfo.files.preprocPNM+'" "'+outfilebase+'" hocr', { env: { 'OMP_THREAD_LIMIT': '1'} }, function(err, stdout, stderr) {
             if (err) {
                 return cb(err);
             } else {
